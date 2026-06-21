@@ -142,7 +142,7 @@ python3 -m pip install -r requirements.txt
 Generate tasks manually:
 
 ```bash
-python3 learning_os.py today --date 2026-06-21
+python3 learning_os.py today --date 2026-06-22
 ```
 
 Reset a test or accidental task start:
@@ -154,7 +154,7 @@ python3 learning_os.py reset-task --task TASK_ID
 Check task resource mappings:
 
 ```bash
-python3 learning_os.py materials --date 2026-06-21 --core-only
+python3 learning_os.py materials --date 2026-06-22 --core-only
 ```
 
 Check whether the always-on service is running:
@@ -238,28 +238,37 @@ python3 learning_os.py reset-task --task TASK_ID
 Check task resource mappings:
 
 ```bash
-python3 learning_os.py materials --date 2026-06-21 --core-only
+python3 learning_os.py materials --date 2026-06-22 --core-only
 ```
 
 ## BC Current Progress Anchor
 
-BC no longer assumes `2026-06-21` is Unit 1 Day 1. Based on the Khan screenshot, the current anchor is:
+BC no longer assumes `2026-06-22` is Unit 1 Day 1. Based on the Khan screenshot, the current anchor is:
 
 ```text
-2026-06-21 -> BC Unit 2 Day 1-2
+2026-06-22 -> BC Unit 2 Day 1-2
 ```
 
 This is configured in `config.json`:
 
 ```json
 "bc_anchor": {
-  "date": "2026-06-21",
+  "date": "2026-06-22",
   "unit": "Unit 2",
   "day": "Day 1-2"
 }
 ```
 
 From that anchor, future dates advance through the BC plan by cumulative task durations.
+
+CSA also starts on `2026-06-22`. The CSA spreadsheet's first row is dated `2026-06-21`, so the planner applies a one-day offset:
+
+```json
+"csa_plan_start_date": "2026-06-21",
+"csa_actual_start_date": "2026-06-22"
+```
+
+This makes `2026-06-22` generate CSA Day 1, then shifts later CSA rows forward by the same offset.
 
 BC Khan launches now use unit-specific URLs when available:
 

@@ -7,14 +7,16 @@
     "AP_Calculus_BC": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/心悦/AP_Calculus_BC_学习计划.xlsx"
   },
   "planner": {
-    "bc_day_1_date": "2026-06-21",
+    "bc_day_1_date": "2026-06-22",
     "bc_anchor": {
-      "date": "2026-06-21",
+      "date": "2026-06-22",
       "unit": "Unit 2",
       "day": "Day 1-2",
-      "reason": "Khan AP Calculus BC screenshot shows Unit 1 mostly progressed and Unit 2 in progress; start daily workflow at Unit 2."
+      "reason": "Learning starts on 2026-06-22. Khan AP Calculus BC screenshot shows Unit 1 mostly progressed and Unit 2 in progress; start daily workflow at Unit 2."
     },
     "csa_year": 2026,
+    "csa_plan_start_date": "2026-06-21",
+    "csa_actual_start_date": "2026-06-22",
     "default_targets_min": {
       "BC_RESOURCE_WORK": 45,
       "BC_PRACTICE": 40,

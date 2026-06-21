@@ -537,8 +537,14 @@ def build_csa_tasks(config, state, current_date):
     wb = load_workbook(plan, data_only=True, read_only=True)
     ws = wb["每日刷题计划"]
     tasks = []
+    planner = config["planner"]
+    csa_date_offset = dt.timedelta(0)
+    if planner.get("csa_plan_start_date") and planner.get("csa_actual_start_date"):
+        csa_date_offset = parse_date_arg(planner["csa_actual_start_date"]) - parse_date_arg(planner["csa_plan_start_date"])
     for row in row_dicts(ws, 3):
-        row_date = normalize_plan_mmdd(row.get("日期"), config["planner"]["csa_year"])
+        row_date = normalize_plan_mmdd(row.get("日期"), planner["csa_year"])
+        if row_date:
+            row_date = row_date + csa_date_offset
         if row_date != current_date:
             continue
         practice_ids = str(row.get("今日刷题编号") or "")
