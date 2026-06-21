@@ -655,6 +655,32 @@ def topic_print_packet_resources(config, course, unit, title, row=None):
     excerpt = create_pdf_excerpt(pdf, start_page, end_page, label)
     if not excerpt:
         return []
+    excerpt_text = ""
+    try:
+        selected_pages = [
+            page for page in index.get("pages", [])
+            if start_page <= page.get("page", 0) <= end_page
+        ]
+        excerpt_text = " ".join(page.get("text", "") for page in selected_pages).lower()
+    except Exception:
+        excerpt_text = ""
+    bad_markers = [
+        "practice exam",
+        "test booklet",
+        "scoring guide",
+        "scoring guidelines",
+        "free-response questions",
+        "answer key",
+        "practice book",
+    ]
+    if any(marker in excerpt_text for marker in bad_markers):
+        warning_path = TASK_MATERIALS_DIR / "material_match_warnings.log"
+        with warning_path.open("a", encoding="utf-8") as f:
+            f.write(
+                f"{dt.datetime.now().isoformat(timespec='seconds')} rejected {course} {unit} {title} "
+                f"p{start_page}-{end_page}: exam/scoring marker detected\n"
+            )
+        return []
     return [{
         "label": f"supplemental_print_packet_{'bc' if course == 'AP_Calculus_BC' else 'csa'}",
         "target": excerpt,
@@ -948,6 +974,7 @@ def launch_item(item):
 def launch_task_resources(task):
     open_label_order = [
         "local_unit_page",
+        "local_workbook",
         "local_practice_pdf",
         "question_file",
         "task_excerpt_stewart",
@@ -1227,6 +1254,104 @@ def material_report(args):
             print(f"  {target}")
 
 
+def resource_text(resource, max_pages=3):
+    target = resource.get("target")
+    if not target or not Path(target).exists() or Path(target).suffix.lower() != ".pdf":
+        return ""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(target)
+        chunks = []
+        for page in reader.pages[:max_pages]:
+            chunks.append(page.extract_text() or "")
+        return " ".join(" ".join(chunks).split())
+    except Exception:
+        return ""
+
+
+def audit_task_materials(task):
+    issues = []
+    warnings = []
+    resources = task.get("resources", [])
+    course = task.get("course")
+    title = task.get("title", "")
+    kind = task.get("kind", "")
+    supplemental = [r for r in resources if str(r.get("label", "")).startswith("supplemental_print_packet")]
+    if course in {"AP_CSA", "AP_Calculus_BC"} and not supplemental:
+        warnings.append("no reliable supplemental Print Packet; workflow will rely on fallback resources")
+    for resource in resources:
+        target = resource.get("target")
+        if target and not Path(target).exists():
+            issues.append(f"missing file: {resource.get('label')}")
+    if course == "AP_CSA" and kind == "CSA_CONCEPT":
+        opened_labels = {"local_workbook", "local_unit_page", "local_practice_pdf", "question_file", "supplemental_print_packet_csa"}
+        if any(r.get("label") == "task_excerpt_java_illuminated" for r in resources):
+            # Java reference is allowed, but it must not be part of launch_task_resources.
+            pass
+        for resource in supplemental:
+            text = resource_text(resource).lower()
+            if (
+                "practice exam" in text
+                or "test booklet" in text
+                or "scoring guide" in text
+                or "answer key" in text
+                or "practice book" in text
+            ):
+                issues.append("CSA concept Print Packet appears to point at practice/exam material")
+            if "unit 1" in title and "unit 1" not in text and "using objects" not in text:
+                issues.append("CSA Unit 1 Print Packet lacks Unit 1/Using Objects signal")
+        if not any(r.get("label") in opened_labels for r in resources):
+            issues.append("CSA task has no launchable primary material")
+    if course == "AP_Calculus_BC":
+        for resource in supplemental:
+            text = resource_text(resource).lower()
+            if "scoring guidelines" in text or "free-response questions" in text:
+                issues.append("BC Print Packet appears to point at FRQ/scoring material")
+    return issues, warnings
+
+
+def audit_materials(args):
+    config = load_config()
+    audit_state = {"tasks": {}, "sessions": {}, "adaptive_time": {}}
+    start = parse_date_arg(args.start) if args.start else today_date()
+    checked = 0
+    failed = 0
+    warned = 0
+    for offset in range(args.days):
+        current_date = start + dt.timedelta(days=offset)
+        tasks = []
+        tasks.extend(build_bc_tasks(config, audit_state, current_date))
+        tasks.extend(build_csa_tasks(config, audit_state, current_date))
+        if not tasks:
+            continue
+        for task in tasks:
+            if args.course and task.get("course") != args.course:
+                continue
+            checked += 1
+            issues, warnings = audit_task_materials(task)
+            if issues:
+                failed += 1
+                print(f"FAIL\t{current_date}\t{task['id']}\t{task['title']}")
+                for issue in issues:
+                    print(f"  - {issue}")
+                for resource in task.get("resources", []):
+                    label = resource.get("label")
+                    if str(label).startswith("task_excerpt") or str(label).startswith("supplemental_print_packet") or label == "local_unit_page":
+                        page_range = resource.get("page_range")
+                        page_text = f" p{page_range[0]}-{page_range[1]}" if page_range else ""
+                        print(f"    {label}{page_text}: {resource.get('target')}")
+            elif warnings:
+                warned += 1
+                print(f"WARN\t{current_date}\t{task['id']}\t{task['title']}")
+                for warning in warnings:
+                    print(f"  - {warning}")
+            elif args.verbose:
+                print(f"OK\t{current_date}\t{task['id']}\t{task['title']}")
+    print(json.dumps({"checked": checked, "failed": failed, "warned": warned, "start": start.isoformat(), "days": args.days}, ensure_ascii=False))
+    if failed:
+        raise SystemExit(1)
+
+
 def reset_task(args):
     state = load_state()
     if args.task not in state["tasks"]:
@@ -1275,6 +1400,12 @@ def main():
     p_materials.add_argument("--date")
     p_materials.add_argument("--core-only", action="store_true")
     p_materials.set_defaults(func=material_report)
+    p_audit = sub.add_parser("audit-materials", help="audit future task material mappings without changing state")
+    p_audit.add_argument("--start", help="YYYY-MM-DD")
+    p_audit.add_argument("--days", type=int, default=60)
+    p_audit.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
+    p_audit.add_argument("--verbose", action="store_true")
+    p_audit.set_defaults(func=audit_materials)
     p_reset = sub.add_parser("reset-task", help="reset a task to Planned after accidental/test start")
     p_reset.add_argument("--task", required=True)
     p_reset.set_defaults(func=reset_task)

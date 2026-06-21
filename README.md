@@ -157,6 +157,14 @@ Check task resource mappings:
 python3 learning_os.py materials --date 2026-06-22 --core-only
 ```
 
+Audit future workflow material mappings without changing saved task state:
+
+```bash
+python3 learning_os.py audit-materials --start 2026-06-22 --days 120
+```
+
+The audit treats obviously wrong auto-open candidates, such as practice exams, answer keys, scoring guides, and FRQ packets on concept-learning tasks, as failures. If no reliable `Print Packet` can be found, the workflow falls back to safer local resources such as the course workbook, Unit page, or textbook excerpt instead of opening a dubious match.
+
 Check whether the always-on service is running:
 
 ```bash
