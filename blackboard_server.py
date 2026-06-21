@@ -41,7 +41,11 @@ def task_rows(date_text):
 
 def render_task(task):
     resources = task.get("resources", [])
-    primary = next((r for r in resources if str(r.get("label", "")).startswith("task_excerpt")), None)
+    primary = next((
+        r for r in resources
+        if str(r.get("label", "")).startswith("task_excerpt")
+        and not (task.get("course") == "AP_CSA" and r.get("label") == "task_excerpt_java_illuminated")
+    ), None)
     unit_page = next((r for r in resources if r.get("label") == "local_unit_page"), None)
     print_packet = next((r for r in resources if str(r.get("label", "")).startswith("supplemental_print_packet")), None)
     launch_url = next((x.get("target") for x in task.get("launch", []) if x.get("type") == "url"), None)

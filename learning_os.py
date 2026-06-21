@@ -26,20 +26,6 @@ TASK_MATERIALS_DIR = BASE / "task_materials"
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 
-CSA_JAVA_PAGE_RANGES = {
-    "Unit 1": (88, 158),
-    "Unit 2": (302, 519),
-    "Unit 3": (520, 644),
-    "Unit 4": (402, 519),
-    "Unit 5": (520, 644),
-    "Unit 6": (645, 789),
-    "Unit 7": (790, 907),
-    "Unit 8": (790, 907),
-    "Unit 9": (908, 1030),
-    "Unit 10": (1155, 1254),
-}
-
-
 TASK_STATES = {
     "Planned",
     "Running",
@@ -194,13 +180,19 @@ def create_pdf_excerpt(source_path, start_page, end_page, label):
         return str(output)
     TASK_MATERIALS_DIR.mkdir(parents=True, exist_ok=True)
     from pypdf import PdfReader, PdfWriter
-    reader = PdfReader(str(source))
-    total = len(reader.pages)
-    start = max(1, min(int(start_page), total))
-    end = max(start, min(int(end_page), total))
-    writer = PdfWriter()
-    for page_index in range(start - 1, end):
-        writer.add_page(reader.pages[page_index])
+    try:
+        reader = PdfReader(str(source))
+        total = len(reader.pages)
+        start = max(1, min(int(start_page), total))
+        end = max(start, min(int(end_page), total))
+        writer = PdfWriter()
+        for page_index in range(start - 1, end):
+            writer.add_page(reader.pages[page_index], excluded_keys=["/Annots", "/B", "/StructParents"])
+    except Exception as exc:
+        warning_path = TASK_MATERIALS_DIR / "excerpt_errors.log"
+        with warning_path.open("a", encoding="utf-8") as f:
+            f.write(f"{dt.datetime.now().isoformat(timespec='seconds')} failed {source} p{start_page}-{end_page}: {exc}\n")
+        return None
     metadata = {
         "/Title": f"AP Learning OS - {label}",
         "/Subject": f"{source.name} pages {start}-{end}"
@@ -244,6 +236,31 @@ def pdf_section_index(source_path, cache_key):
         sections[f"{m.group(1)}.{m.group(2)}"] = page
     write_json(cache_path, {"source": str(source), "source_mtime": source.stat().st_mtime, "sections": sections})
     return sections
+
+
+def pdf_text_index(source_path, cache_key, max_chars=4000):
+    source = Path(source_path)
+    if not source.exists():
+        return None
+    cache_path = BASE / "data" / f"{cache_key}_text_index.json"
+    if cache_path.exists():
+        cached = read_json(cache_path)
+        if cached.get("source_mtime") == source.stat().st_mtime:
+            return cached
+    from pypdf import PdfReader
+    pages = []
+    with open(os.devnull, "w") as devnull:
+        with contextlib.redirect_stderr(devnull):
+            reader = PdfReader(str(source))
+            for idx, page in enumerate(reader.pages, start=1):
+                try:
+                    text = page.extract_text() or ""
+                except Exception:
+                    text = ""
+                pages.append({"page": idx, "text": " ".join(text.split())[:max_chars]})
+    index = {"source": str(source), "source_mtime": source.stat().st_mtime, "pages": pages}
+    write_json(cache_path, index)
+    return index
 
 
 def next_section_page(section_pages, section):
@@ -312,18 +329,115 @@ def stewart_excerpt_resources(config, row):
     return resources
 
 
+def csa_textbook_keywords(unit, title):
+    text = str(title or "")
+    unit_text = str(unit or "")
+    keywords = [
+        ("Java", 2),
+        ("program", 2),
+        ("chapter contents", -8),
+        ("chapter summary", -8),
+        ("skill practice", -8),
+        ("multiple choice exercises", -8),
+        ("index", -5),
+    ]
+    if "Unit 1" in unit_text:
+        keywords.extend([
+            ("Programming Building Blocks", 8),
+            ("Java Basics", 8),
+            ("program has two elements", 12),
+            ("instructions and data", 12),
+            ("input the data", 10),
+            ("output the results", 10),
+            ("data types variables and constants", 14),
+            ("declaring variables", 12),
+            ("integer data types", 10),
+            ("floating-point data types", 10),
+            ("boolean data type", 8),
+            ("assignment operator", 10),
+            ("expressions and arithmetic operators", 12),
+            ("String literals", 8),
+            ("Java Application Structure", 2),
+        ])
+    concept_map = {
+        "算法": [("algorithm", 10), ("instructions", 8), ("processing", 8), ("input the data", 8), ("output the results", 8)],
+        "变量": [("variable", 10), ("variables", 10), ("declaring variables", 12), ("named locations in memory", 10)],
+        "数据类型": [("data type", 10), ("data types", 10), ("primitive", 8), ("int", 3), ("double", 3), ("boolean", 3), ("char", 3)],
+        "表达式": [("expression", 10), ("expressions", 10), ("arithmetic operators", 10), ("operator precedence", 8)],
+        "输出": [("output", 10), ("print", 6), ("println", 6), ("System.out", 8)],
+        "赋值": [("assignment operator", 12), ("initial values", 8), ("literals", 6)],
+        "输入": [("input", 10), ("keyboard", 6), ("Scanner", 12)],
+        "Scanner": [("Scanner", 14), ("keyboard input", 10), ("java.util.Scanner", 12)],
+        "类型转换": [("type conversion", 14), ("casting", 10), ("compatible data types", 8)],
+        "复合赋值": [("compound assignment", 14), ("increment", 8), ("decrement", 8)],
+        "API": [("API", 10), ("library", 8), ("documentation", 8)],
+        "库": [("library", 10), ("package", 6), ("import", 6)],
+        "注释": [("comment", 10), ("comments", 10), ("documentation", 6)],
+        "方法": [("method", 8), ("methods", 8), ("method signature", 12), ("parameters", 8), ("arguments", 8)],
+        "调用": [("calling methods", 12), ("method call", 12), ("arguments", 8)],
+        "Math": [("Math class", 14), ("Math.", 10)],
+        "对象": [("object", 8), ("objects", 8), ("instantiation", 8)],
+        "String": [("String class", 14), ("substring", 10), ("indexOf", 10), ("equals", 10), ("length", 8)],
+    }
+    for trigger, mapped in concept_map.items():
+        if trigger in text:
+            keywords.extend(mapped)
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9_.]{2,}", text):
+        keywords.append((token, 3))
+    return keywords
+
+
+def best_keyword_window(index, keywords, max_pages=28, context_pages=1):
+    pages = index.get("pages", [])
+    if not pages:
+        return None
+    scored = [(page["page"], keyword_score(page.get("text", ""), keywords)) for page in pages]
+    best = None
+    left = 0
+    running = 0
+    for right, (_, score) in enumerate(scored):
+        running += score
+        while scored[right][0] - scored[left][0] + 1 > max_pages:
+            running -= scored[left][1]
+            left += 1
+        if best is None or running > best[0]:
+            best = (running, left, right)
+    if not best or best[0] <= 0:
+        return None
+    _, left, right = best
+    while left <= right and scored[left][1] <= 0:
+        left += 1
+    while right >= left and scored[right][1] <= 0:
+        right -= 1
+    if left > right:
+        return None
+    start = max(pages[0]["page"], scored[left][0] - context_pages)
+    end = min(pages[-1]["page"], scored[right][0] + context_pages)
+    hits = sorted([(score, page) for page, score in scored if start <= page <= end and score > 0], reverse=True)[:8]
+    return [start, end], hits
+
+
 def csa_excerpt_resources(config, unit, title, include_practice=False):
     material = config.get("canonical_materials", {}).get("AP_CSA", {}).get("java_textbook")
     resources = []
-    if material and Path(material).exists() and unit in CSA_JAVA_PAGE_RANGES:
-        start_page, end_page = csa_daily_page_range(unit, title)
-        excerpt = create_pdf_excerpt(material, start_page, end_page, f"CSA {unit} Java Illuminated")
+    if material and Path(material).exists():
+        index = java_textbook_scope(pdf_text_index(material, "java_illuminated"), unit)
+        result = best_keyword_window(index, csa_textbook_keywords(unit, title), max_pages=32, context_pages=1) if index else None
+        if result:
+            page_range, hits = result
+            start_page, end_page = page_range
+        else:
+            start_page, end_page = 1, 12
+            hits = []
+        excerpt = create_pdf_excerpt(material, start_page, end_page, f"CSA {unit} Java Illuminated {title}")
         if excerpt:
             resources.append({
                 "label": "task_excerpt_java_illuminated",
                 "target": excerpt,
                 "source": material,
-                "page_range": [start_page, end_page]
+                "page_range": [start_page, end_page],
+                "match": "topic_keywords",
+                "top_hits": hits,
             })
         resources.append({"label": "canonical_java_textbook", "target": material})
     master = config.get("canonical_materials", {}).get("AP_CSA", {}).get("ap_master_packet")
@@ -335,29 +449,9 @@ def csa_excerpt_resources(config, unit, title, include_practice=False):
 def print_packet_text_index(config):
     packet = config.get("dated_print_packet", {})
     pdf = packet.get("pdf")
-    if not pdf or not Path(pdf).exists():
+    if not pdf:
         return None
-    source = Path(pdf)
-    cache_path = BASE / "data" / "dated_print_packet_text_index.json"
-    if cache_path.exists():
-        cached = read_json(cache_path)
-        if cached.get("source_mtime") == source.stat().st_mtime:
-            return cached
-    from pypdf import PdfReader
-    pages = []
-    with open(os.devnull, "w") as devnull:
-        with contextlib.redirect_stderr(devnull):
-            reader = PdfReader(str(source))
-            for idx, page in enumerate(reader.pages, start=1):
-                try:
-                    text = page.extract_text() or ""
-                except Exception:
-                    text = ""
-                compact = " ".join(text.split())
-                pages.append({"page": idx, "text": compact[:4000]})
-    index = {"source": str(source), "source_mtime": source.stat().st_mtime, "pages": pages}
-    write_json(cache_path, index)
-    return index
+    return pdf_text_index(pdf, "dated_print_packet")
 
 
 def keyword_score(text, keywords):
@@ -369,6 +463,62 @@ def keyword_score(text, keywords):
         occurrences = lowered.count(keyword.lower())
         score += occurrences * weight
     return score
+
+
+def scoped_index(index, start_page=None, end_page=None):
+    if not index or (start_page is None and end_page is None):
+        return index
+    pages = []
+    for page in index.get("pages", []):
+        number = page["page"]
+        if start_page is not None and number < start_page:
+            continue
+        if end_page is not None and number > end_page:
+            continue
+        pages.append(page)
+    if not pages:
+        return index
+    scoped = dict(index)
+    scoped["pages"] = pages
+    scoped["scope"] = [pages[0]["page"], pages[-1]["page"]]
+    return scoped
+
+
+def unit_number(unit):
+    match = re.search(r"\d+", str(unit or ""))
+    return int(match.group(0)) if match else None
+
+
+def find_text_page(index, patterns, start_after=0):
+    lowered_patterns = [pattern.lower() for pattern in patterns if pattern]
+    for page in index.get("pages", []):
+        if page["page"] <= start_after:
+            continue
+        text = page.get("text", "").lower()
+        if any(pattern in text for pattern in lowered_patterns):
+            return page["page"]
+    return None
+
+
+def csa_print_packet_scope(index, unit):
+    number = unit_number(unit)
+    if not number:
+        return index
+    start = find_text_page(index, [f"AP COMPUTER SCIENCE A UNIT {number}"])
+    if not start:
+        return index
+    next_start = find_text_page(index, [f"AP COMPUTER SCIENCE A UNIT {number + 1}"], start_after=start)
+    end = next_start - 1 if next_start else start + 120
+    return scoped_index(index, start, end)
+
+
+def java_textbook_scope(index, unit):
+    if str(unit or "") == "Unit 1":
+        start = find_text_page(index, ["CHAPTER 2 Programming Building Blocks", "Programming Building Blocks—Java Basics"], start_after=40)
+        if start:
+            next_start = find_text_page(index, ["CHAPTER 3"], start_after=start)
+            return scoped_index(index, start, (next_start - 1) if next_start else start + 90)
+    return index
 
 
 def topic_print_keywords(course, unit, title, row=None):
@@ -385,6 +535,9 @@ def topic_print_keywords(course, unit, title, row=None):
             ("rate of change", 4),
             ("导数", 5),
             ("切线", 4),
+            ("SCORING GUIDELINES", -40),
+            ("Question ", -8),
+            ("Free Response", -12),
         ])
         if row:
             refs = parse_stewart_sections(row.get("课件/课本参考"))
@@ -396,12 +549,13 @@ def topic_print_keywords(course, unit, title, row=None):
             keywords.extend([("limit", 5), ("continuity", 4), ("horizontal asymptote", 3), ("极限", 5)])
         if "Unit 2" in unit or "导数" in title:
             keywords.extend([
-                ("defining the derivative", 14),
-                ("definition of derivative", 12),
-                ("derivative notation", 10),
-                ("tangent line", 10),
+                ("Defining the Derivative of a Function", 80),
+                ("defining the derivative", 60),
+                ("definition of derivative", 55),
+                ("derivative notation", 40),
+                ("tangent line", 25),
                 ("basic derivative", 6),
-                ("Topic 2.D", 8),
+                ("Topic 2.D", 45),
                 ("slope field", -12),
             ])
         if "Unit 3" in unit:
@@ -416,15 +570,17 @@ def topic_print_keywords(course, unit, title, row=None):
         ])
         if "Unit 1" in unit:
             keywords.extend([
-                ("UNIT 1", 5),
-                ("Using Objects", 5),
-                ("Introduction to Java", 12),
-                ("Primitive data type", 12),
-                ("primitive types", 10),
-                ("data types", 10),
-                ("expressions", 10),
-                ("output", 8),
-                ("main method", 8),
+                ("UNIT 1", 2),
+                ("Unit 1: Using Objects and Methods", 4),
+                ("Using Objects", 3),
+                ("Chapter Introduction and Learning Strategy", 3),
+                ("Introduction to Java", 4),
+                ("Primitive data type", 6),
+                ("primitive types", 6),
+                ("data types", 6),
+                ("expressions", 5),
+                ("output", 5),
+                ("main method", 4),
                 ("Methods", 4),
                 ("variable", 3),
                 ("expression", 4),
@@ -433,10 +589,34 @@ def topic_print_keywords(course, unit, title, row=None):
                 ("String", 3),
                 ("变量", 5),
                 ("表达式", 5),
+                ("UNIT 5", -30),
                 ("Scope and Access", -20),
                 ("Global and Local Variables", -20),
                 ("constructor", -6),
             ])
+            if any(k in title for k in ["1.1", "1.2", "1.3", "算法", "数据类型", "表达式", "输出"]):
+                keywords.extend([
+                    ("Chapter Introduction and Learning Strategy", 18),
+                    ("Introduction to Java", 16),
+                    ("Primitive data type", 14),
+                    ("创建变量", 10),
+                    ("Output Code", 12),
+                    ("输出语句", 12),
+                    ("Operator 运算符", 8),
+                ])
+            if any(k in title for k in ["1.4", "赋值", "输入", "Scanner"]):
+                keywords.extend([
+                    ("赋值操作", 20),
+                    ("Other Methods to Create a Variable", 18),
+                    ("其他创建变量的方式", 18),
+                    ("Change Value", 16),
+                    ("更改变量", 16),
+                    ("Output Code", 14),
+                    ("输出语句", 14),
+                    ("System.out.println", 12),
+                    ("Scanner", 20),
+                    ("输入", 16),
+                ])
         if "Unit 2" in unit:
             keywords.extend([("boolean", 5), ("if", 3), ("loop", 5), ("iteration", 5), ("while", 4), ("for", 4)])
         if "Unit 3" in unit:
@@ -449,31 +629,11 @@ def topic_print_keywords(course, unit, title, row=None):
 
 
 def best_topic_page_range(index, keywords, max_pages=10):
-    pages = index.get("pages", [])
-    scored = []
-    for page in pages:
-        score = keyword_score(page.get("text", ""), keywords)
-        if score > 0:
-            scored.append((score, page["page"]))
-    if not scored:
-        return None
-    scored.sort(reverse=True)
-    anchor_page = scored[0][1]
-    best_start = anchor_page
-    best_end = min(best_start + max_pages - 1, pages[-1]["page"])
-    return [best_start, best_end], scored[:8]
+    return best_keyword_window(index, keywords, max_pages=max_pages, context_pages=0)
 
 
-def print_packet_override_range(course, unit, title):
-    title = str(title or "")
-    unit = str(unit or "")
-    if course == "AP_CSA" and unit == "Unit 1":
-        if any(k in title for k in ["1.1-1.3", "算法", "变量", "数据类型", "表达式", "输出"]):
-            return [569, 578], "manual_topic_override:csa_unit1_intro"
-    if course == "AP_Calculus_BC" and unit == "Unit 2":
-        if any(k in title for k in ["导数定义", "切线斜率", "derivative", "tangent"]):
-            return [3185, 3192], "manual_topic_override:bc_unit2_derivative_definition"
-    return None, None
+def best_csa_print_packet_page_range(index, keywords):
+    return best_keyword_window(index, keywords, max_pages=10, context_pages=4)
 
 
 def topic_print_packet_resources(config, course, unit, title, row=None):
@@ -481,15 +641,14 @@ def topic_print_packet_resources(config, course, unit, title, row=None):
     index = print_packet_text_index(config)
     if not index:
         return []
-    page_range, match = print_packet_override_range(course, unit, title)
-    hits = []
-    if not page_range:
-        keywords = topic_print_keywords(course, unit, title, row)
-        result = best_topic_page_range(index, keywords)
-        if not result:
-            return []
-        page_range, hits = result
-        match = "topic_keywords"
+    if course == "AP_CSA":
+        index = csa_print_packet_scope(index, unit)
+    keywords = topic_print_keywords(course, unit, title, row)
+    result = best_csa_print_packet_page_range(index, keywords) if course == "AP_CSA" else best_topic_page_range(index, keywords)
+    if not result:
+        return []
+    page_range, hits = result
+    match = "topic_keywords"
     start_page, end_page = page_range
     pdf = index["source"]
     label = f"{course} topic print packet {unit} {title}"
@@ -505,32 +664,6 @@ def topic_print_packet_resources(config, course, unit, title, row=None):
         "top_hits": hits,
         "note": packet.get("note", "")
     }]
-
-
-def csa_daily_page_range(unit, title):
-    text = str(title or "")
-    if unit == "Unit 1":
-        if any(k in text for k in ["1.1", "1.2", "1.3", "算法", "变量", "数据类型", "表达式", "输出"]):
-            return (92, 139)
-        if any(k in text for k in ["1.4", "Scanner", "输入"]):
-            return (140, 158)
-        if any(k in text for k in ["1.5", "1.6", "类型转换", "复合赋值"]):
-            return (116, 139)
-        if any(k in text for k in ["1.7", "1.8", "API", "库", "注释"]):
-            return (41, 87)
-        if any(k in text for k in ["1.9", "1.10", "方法签名", "调用"]):
-            return (159, 200)
-        if any(k in text for k in ["Math", "对象实例", "new关键字"]):
-            return (159, 200)
-        if any(k in text for k in ["String", "substring", "indexOf", "equals"]):
-            return (159, 200)
-    if unit == "Unit 2":
-        if any(k in text for k in ["if", "布尔", "德摩根", "选择"]):
-            return (302, 401)
-        if any(k in text for k in ["while", "for", "循环", "迭代", "嵌套"]):
-            return (402, 519)
-    return CSA_JAVA_PAGE_RANGES.get(unit, (88, 158))
-
 
 def build_csa_tasks(config, state, current_date):
     plan = Path(config["plans"]["AP_CSA"])
@@ -813,21 +946,22 @@ def launch_item(item):
 
 
 def launch_task_resources(task):
-    open_labels = {
+    open_label_order = [
+        "local_unit_page",
+        "local_practice_pdf",
+        "question_file",
         "task_excerpt_stewart",
-        "task_excerpt_java_illuminated",
         "supplemental_print_packet_bc",
         "supplemental_print_packet_csa",
-        "question_file",
-        "local_practice_pdf",
-        "local_unit_page",
-    }
+    ]
+    resources_by_label = {}
     for resource in task.get("resources", []):
-        if resource.get("label") not in open_labels:
-            continue
-        target = resource.get("target")
-        if target and Path(target).exists():
-            subprocess.Popen(["open", target])
+        resources_by_label.setdefault(resource.get("label"), []).append(resource)
+    for label in open_label_order:
+        for resource in resources_by_label.get(label, []):
+            target = resource.get("target")
+            if target and Path(target).exists():
+                subprocess.Popen(["open", target])
 
 
 def set_task_state(state, task_id, new_state):

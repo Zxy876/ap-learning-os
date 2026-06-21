@@ -199,13 +199,13 @@ When today's tasks are generated, the engine creates task-specific PDF excerpts 
 Examples:
 
 - BC `Stewart §2.1-2.3` becomes a small PDF excerpt from Stewart pages 110-135.
-- CSA Unit 1 Day 1 becomes a Java Illuminated excerpt around Java application structure, variables, and expressions.
-- The dated print packet is searched or overridden by task topic every time `today` runs, then copied into a small task-specific `Print Packet` PDF.
+- CSA concept days use the dated print packet as the primary launch material because it follows AP Unit topic language more closely.
+- Java Illuminated excerpts are generated as supporting references when a reliable topic window can be found, but they are not opened automatically.
+- The dated print packet is searched by course, Unit scope, and task topic every time `today` runs, then copied into a small task-specific `Print Packet` PDF.
 
 Workflow launch opens only task-specific jump resources by default:
 
 - `task_excerpt_stewart`
-- `task_excerpt_java_illuminated`
 - `supplemental_print_packet_bc`
 - `supplemental_print_packet_csa`
 - `question_file`
@@ -220,7 +220,7 @@ The dated print packet is also integrated as supplemental material:
 /Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包_带日期/00_按日期学习顺序打印版/00_AP全部资料_带完成日期_学习顺序.pdf
 ```
 
-Its old schedule file is kept only as reference. The engine uses the packet as a source library: each daily task extracts the pages that match that task's course, unit, and topic, then exposes the result as a `Print Packet` link on the blackboard and opens it during `Start Workflow`. For known fragile matches, such as current CSA Unit 1 intro and BC Unit 2 derivative definition, the engine uses explicit page overrides to avoid pulling the wrong chapter.
+Its old schedule file is kept only as reference. The engine uses the packet as a source library: each daily task first scopes the search to the matching course and Unit when possible, then extracts the pages that match the task topic. The result is exposed as a `Print Packet` link on the blackboard and opened during `Start Workflow`.
 
 When a session starts, the engine launches:
 
