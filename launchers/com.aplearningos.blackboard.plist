@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.aplearningos.blackboard</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/zxydediannao/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3</string>
+    <string>/Users/zxydediannao/Downloads/ AP Master Library/AP_Learning_OS/blackboard_server.py</string>
+    <string>--no-open</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/zxydediannao/Downloads/ AP Master Library</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/zxydediannao/Downloads/ AP Master Library/AP_Learning_OS/logs/blackboard.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/zxydediannao/Downloads/ AP Master Library/AP_Learning_OS/logs/blackboard.err.log</string>
+</dict>
+</plist>

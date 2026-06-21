@@ -1,0 +1,117 @@
+{
+  "system_name": "AP Learning OS",
+  "timezone": "Asia/Shanghai",
+  "workspace_root": "/Users/zxydediannao/Downloads/ AP Master Library",
+  "plans": {
+    "AP_CSA": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/心悦/AP_CSA_学习计划.xlsx",
+    "AP_Calculus_BC": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/心悦/AP_Calculus_BC_学习计划.xlsx"
+  },
+  "planner": {
+    "bc_day_1_date": "2026-06-21",
+    "bc_anchor": {
+      "date": "2026-06-21",
+      "unit": "Unit 2",
+      "day": "Day 1-2",
+      "reason": "Khan AP Calculus BC screenshot shows Unit 1 mostly progressed and Unit 2 in progress; start daily workflow at Unit 2."
+    },
+    "csa_year": 2026,
+    "default_targets_min": {
+      "BC_RESOURCE_WORK": 45,
+      "BC_PRACTICE": 40,
+      "BC_ERROR_LOG": 15,
+      "CSA_CONCEPT": 35,
+      "CSA_PRACTICE": 30,
+      "CSA_ERROR_LOG": 15
+    }
+  },
+  "completion_policy": {
+    "auto_complete_allowed": false,
+    "candidate_threshold": 0.75,
+    "time_escalation_min": 15,
+    "max_target_min": 90
+  },
+  "signals": {
+    "window_sample_interval_sec": 30,
+    "screenshot_at_start": true,
+    "screenshot_at_end": true,
+    "screenshot_midpoint": true,
+    "ocr_enabled": false
+  },
+  "apps": {
+    "browser": "Safari",
+    "notes": "GoodNotes",
+    "pdf": "Preview",
+    "editor": "Visual Studio Code"
+  },
+  "urls": {
+    "khan_calculus_bc": "https://www.khanacademy.org/math/ap-calculus-bc",
+    "khan_ap_csa": "https://www.khanacademy.org/computing/ap-computer-science-a",
+    "khan_calculus_bc_units": {
+      "Unit 1": "https://www.khanacademy.org/math/ap-calculus-bc/bc-limits-new",
+      "Unit 2": "https://www.khanacademy.org/math/ap-calculus-bc/bc-differentiation-1-new",
+      "Unit 3": "https://www.khanacademy.org/math/ap-calculus-bc/bc-differentiation-2-new",
+      "Unit 4": "https://www.khanacademy.org/math/ap-calculus-bc/bc-applications-derivatives-new",
+      "Unit 5": "https://www.khanacademy.org/math/ap-calculus-bc/bc-applications-derivatives-new",
+      "Unit 6": "https://www.khanacademy.org/math/ap-calculus-bc/bc-integration-new",
+      "Unit 7": "https://www.khanacademy.org/math/ap-calculus-bc/bc-differential-equations-new",
+      "Unit 8": "https://www.khanacademy.org/math/ap-calculus-bc/bc-applications-of-integration-new",
+      "Unit 9": "https://www.khanacademy.org/math/ap-calculus-bc/bc-parametric-polar-vector-new",
+      "Unit 10": "https://www.khanacademy.org/math/ap-calculus-bc/bc-series-new"
+    }
+  },
+  "local_resource_fallbacks": {
+    "AP_Calculus_BC": {
+      "workbook": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/GOODNOTES_WORKBOOK.pdf",
+      "dashboard": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Dashboard.html",
+      "unit_pages": {
+        "Unit 1": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_1_Limits_and_Continuity.html",
+        "Unit 2": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_2_Differentiation_Definition_and_Rules.html",
+        "Unit 3": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_3_Applications_of_Derivatives.html",
+        "Unit 4": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_4_Integration_and_Accumulation.html",
+        "Unit 5": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_5_Differential_Equations.html",
+        "Unit 6": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_6_Parametric_Polar_and_Vector_Functions.html",
+        "Unit 7": "AP_Interactive_GoodNotes_System/AP_Calculus_BC/Midwife_Pages/Unit_7_Infinite_Series.html"
+      },
+      "summary": "AP打印资料大包/01_知识点总结/01_AP微积分BC知识点总结.pdf"
+    },
+    "AP_CSA": {
+      "workbook": "AP_Interactive_GoodNotes_System/AP_CSA/GOODNOTES_WORKBOOK.pdf",
+      "dashboard": "AP_Interactive_GoodNotes_System/AP_CSA/Dashboard.html",
+      "unit_pages": {
+        "Unit 1": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_1_Primitive_Types.html",
+        "Unit 2": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_2_Using_Objects.html",
+        "Unit 3": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_3_Boolean_Expressions_and_If_Statements.html",
+        "Unit 4": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_4_Iteration.html",
+        "Unit 5": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_5_Writing_Classes.html",
+        "Unit 6": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_6_Array.html",
+        "Unit 7": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_7_ArrayList.html",
+        "Unit 8": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_8_2D_Array.html",
+        "Unit 9": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_9_Inheritance.html",
+        "Unit 10": "AP_Interactive_GoodNotes_System/AP_CSA/Midwife_Pages/Unit_10_Recursion.html"
+      },
+      "practice_pdfs": {
+        "Unit 1": "AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit1.pdf",
+        "Unit 2": "AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit2.pdf",
+        "Unit 3": "AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit3.pdf",
+        "Unit 4": "AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit4.pdf"
+      },
+      "summary": "AP打印资料大包/01_知识点总结/02_AP_CSA知识点总结.pdf"
+    }
+  },
+  "canonical_materials": {
+    "AP_Calculus_BC": {
+      "stewart_textbook": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/javabook/James Stewart - Calculus_ Early transcendentals 8th edition(2016, Brooks Cole).pdf",
+      "ap_master_packet": "/Users/zxydediannao/Library/Mobile Documents/iCloud~QReader~MarginStudy~easy/Documents/00_AP全部资料_带完成日期_学习顺序 2.pdf"
+    },
+    "AP_CSA": {
+      "java_textbook": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/javabook/Java Illuminated_ An Active Learning Approach, 6th Edition -- Julie A_ Anderson, Hervé J_ Franceschi -- 6th, 2023 -- Jones & Bartlett Learning, LLC -- 9781284250480 -- a38c2729310f379bc8c2795860.pdf",
+      "ap_master_packet": "/Users/zxydediannao/Library/Mobile Documents/iCloud~QReader~MarginStudy~easy/Documents/00_AP全部资料_带完成日期_学习顺序 2.pdf"
+    }
+  },
+  "dated_print_packet": {
+    "pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包_带日期/00_按日期学习顺序打印版/00_AP全部资料_带完成日期_学习顺序.pdf",
+    "schedule": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包_带日期/00_按日期学习顺序打印版/日期分配说明.txt",
+    "role": "supplemental_print_packet",
+    "note": "This packet was generated for an older date-driven print plan. It is useful as supplemental dated print practice, but it should not replace task-specific source excerpts."
+  }
+}
