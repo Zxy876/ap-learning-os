@@ -100,6 +100,12 @@
       "summary": "AP打印资料大包/01_知识点总结/02_AP_CSA知识点总结.pdf"
     }
   },
+  "resource_index_aliases": {
+    "AP_Calculus_BC": {
+      "AP Calculus BC Vocabulary.pdf": "/Users/zxydediannao/Downloads/AP Cal BC 词汇表.pdf",
+      "AP Calculus BC Formula sheet.pdf": "/Users/zxydediannao/Downloads/AP Calculus BC Formula.pdf"
+    }
+  },
   "canonical_materials": {
     "AP_Calculus_BC": {
       "stewart_textbook": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/javabook/James Stewart - Calculus_ Early transcendentals 8th edition(2016, Brooks Cole).pdf",

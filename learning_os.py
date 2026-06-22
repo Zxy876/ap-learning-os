@@ -160,6 +160,7 @@ def normalize_resource_key(value):
 
 def resource_search_roots(config):
     roots = [
+        Path("/Users/zxydediannao/Downloads"),
         Path(config["workspace_root"]),
         Path("/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs"),
         Path("/Users/zxydediannao/Library/Mobile Documents/iCloud~QReader~MarginStudy~easy/Documents"),
@@ -193,7 +194,8 @@ def resource_aliases(config):
                 canonical.get("AP_CSA", {}).get("java_textbook"),
         }
     }
-    aliases.update(config.get("resource_index_aliases", {}))
+    for course, course_aliases in config.get("resource_index_aliases", {}).items():
+        aliases.setdefault(course, {}).update(course_aliases)
     return aliases
 
 
