@@ -8,7 +8,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from learning_os import BASE, BLACKBOARD_PATH, load_config, load_state, save_state, generate_today, parse_date_arg, set_task_state
+from learning_os import BASE, BLACKBOARD_PATH, load_config, load_state, save_state, generate_today, parse_date_arg, apply_task_final_state
 
 
 PORT = 8765
@@ -63,6 +63,7 @@ def render_task(task):
         '<div class="actions">',
         f'<form method="post" action="/api/start"><input type="hidden" name="task" value="{esc(task["id"])}"><button>Start Workflow</button></form>',
         f'<form method="post" action="/api/state"><input type="hidden" name="task" value="{esc(task["id"])}"><input type="hidden" name="state" value="Completed"><button class="ok">Mark Completed</button></form>',
+        f'<form method="post" action="/api/state"><input type="hidden" name="task" value="{esc(task["id"])}"><input type="hidden" name="state" value="Failed"><button class="notdone">!completed</button></form>',
         f'<form method="post" action="/api/state"><input type="hidden" name="task" value="{esc(task["id"])}"><input type="hidden" name="state" value="Partially Completed"><button class="partial">Partial</button></form>',
         f'<form method="post" action="/api/state"><input type="hidden" name="task" value="{esc(task["id"])}"><input type="hidden" name="state" value="Blocked"><button class="block">Blocked</button></form>',
         '</div>',
@@ -114,6 +115,7 @@ h2 {{ font-size: 18px; margin: 4px 0 0; }}
 .actions, .links {{ display:flex; flex-wrap:wrap; gap:8px; margin: 8px 0; }}
 button, .links a, header a {{ border:1px solid #bbb; background:#fafafa; color:#202124; border-radius:6px; padding:8px 10px; font-size:14px; text-decoration:none; cursor:pointer; }}
 button.ok {{ background:#e7f4ea; border-color:#9cc9a5; }}
+button.notdone {{ background:#fdeaea; border-color:#df9d9d; font-weight:700; }}
 button.partial {{ background:#fff7df; border-color:#e1be62; }}
 button.block {{ background:#fdeaea; border-color:#df9d9d; }}
 .Completed {{ border-left: 5px solid #2e7d32; }}
@@ -185,7 +187,7 @@ class Handler(BaseHTTPRequestHandler):
             new_state = form.get("state", [""])[0]
             state = load_state()
             if task_id in state["tasks"]:
-                set_task_state(state, task_id, new_state)
+                apply_task_final_state(state, task_id, new_state, "blackboard")
                 save_state(state)
                 play_sound("Glass" if new_state == "Completed" else "Pop")
             self.redirect(self.headers.get("Referer", "/"))

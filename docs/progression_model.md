@@ -266,3 +266,5 @@ python3 learning_os.py plan-delays --course AP_Calculus_BC --format json
 ```
 
 Delay is per course. A BC incomplete task shifts BC only; a CSA incomplete task shifts CSA only.
+
+The local blackboard also exposes this rule through the `!completed` button. Pressing `!completed`, `Partial`, or `Blocked` records a delay event. Pressing `Mark Completed` removes any delay event previously created by that task.

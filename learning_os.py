@@ -131,7 +131,10 @@ def schedule_delay_days(state, course, current_date):
 
 def apply_schedule_delay_for_review(state, task, session_id, final_state):
     events = state.setdefault("schedule_delay_events", [])
-    events[:] = [event for event in events if event.get("session_id") != session_id]
+    events[:] = [
+        event for event in events
+        if event.get("session_id") != session_id and event.get("task_id") != task.get("id")
+    ]
     course = task.get("course")
     if course not in {"AP_CSA", "AP_Calculus_BC"}:
         return None
@@ -150,6 +153,31 @@ def apply_schedule_delay_for_review(state, task, session_id, final_state):
     }
     events.append(event)
     return event
+
+
+def apply_task_final_state(state, task_id, final_state, review_source="blackboard", adjust_min=None):
+    task = state["tasks"][task_id]
+    set_task_state(state, task_id, final_state)
+    key = task["task_key"]
+    adaptive = state.setdefault("adaptive_time", {})
+    if final_state == "Completed":
+        adaptive.pop(key, None)
+        delay_event = apply_schedule_delay_for_review(state, task, f"{review_source}:{task_id}", final_state)
+    else:
+        current_min = int(task["target_min"])
+        config = load_config()
+        if final_state in {"Partially Completed", "Failed"}:
+            bump = int(adjust_min if adjust_min is not None else config["completion_policy"]["time_escalation_min"])
+            cap = int(config["completion_policy"]["max_target_min"])
+            adaptive[key] = min(cap, current_min + bump)
+        delay_event = apply_schedule_delay_for_review(state, task, f"{review_source}:{task_id}", final_state)
+    task["last_manual_review"] = {
+        "state": final_state,
+        "source": review_source,
+        "reviewed_at": dt.datetime.now().isoformat(timespec="seconds"),
+        "schedule_delay_event": delay_event,
+    }
+    return delay_event
 
 
 def find_existing_path(config, candidate):
