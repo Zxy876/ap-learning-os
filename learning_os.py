@@ -428,6 +428,18 @@ def resource_index_resources(config, course, unit, title="", kind=None):
     return resources
 
 
+def supplemental_courseware_resources(config, course, unit):
+    target = config.get("supplemental_courseware", {}).get(course, {}).get(str(unit))
+    if target and Path(target).exists():
+        return [{
+            "label": "supplemental_courseware",
+            "target": target,
+            "source": "supplemental_courseware",
+            "index_unit": str(unit),
+        }]
+    return []
+
+
 def dedupe_resources(resources):
     seen = set()
     clean = []
@@ -1002,6 +1014,7 @@ def build_csa_tasks(config, state, current_date):
             row.get("学习内容"),
             kind,
         ))
+        resources.extend(supplemental_courseware_resources(config, "AP_CSA", row.get("Unit")))
         resources.extend(csa_excerpt_resources(config, row.get("Unit"), row.get("学习内容"), include_practice=is_practice))
         resources = dedupe_resources(resources)
         tasks.append({
@@ -1266,6 +1279,7 @@ def launch_item(item):
 def launch_task_resources(task):
     open_label_order = [
         "resource_index_courseware",
+        "supplemental_courseware",
         "resource_index_syllabus",
         "resource_index_textbook",
         "resource_index_practice_canvas",
@@ -1546,7 +1560,7 @@ def material_report(args):
                 str(label).startswith("resource_index_")
                 or
                 str(label).startswith("task_excerpt")
-                or label in {"question_file"}
+                or label in {"question_file", "supplemental_courseware"}
             ):
                 continue
             exists = target_exists(target)

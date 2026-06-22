@@ -24,6 +24,14 @@
       "CSA_CONCEPT": 35,
       "CSA_PRACTICE": 30,
       "CSA_ERROR_LOG": 15
+    },
+    "AP_CSA": {
+      "AP Computer Science A unit1.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit1.pdf",
+      "AP Computer Science A unit2.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit2.pdf",
+      "AP Computer Science A unit3.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit3.pdf",
+      "AP Computer Science A unit4.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit4.pdf",
+      "AP Computer Science A Midterm.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A Midterm.pdf",
+      "AP Computer Science A Final.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A Final.pdf"
     }
   },
   "completion_policy": {
@@ -102,10 +110,34 @@
   },
   "resource_index_aliases": {
     "AP_Calculus_BC": {
-      "AP Calculus BC Vocabulary.pdf": "/Users/zxydediannao/Downloads/AP Cal BC 词汇表.pdf",
-      "AP Calculus BC Formula sheet.pdf": "/Users/zxydediannao/Downloads/AP Calculus BC Formula.pdf",
-      "Unit 9 Parametric Equations, Polar... .pdf": "/Users/zxydediannao/Downloads/Unit 9 Learning Objectives (1).pdf",
-      "Unit 10 Infinite Sequences and Series.pdf": "/Users/zxydediannao/Downloads/Unit 10 Learning Objectives.pdf"
+      "AP Calculus BC Vocabulary.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/AP Calculus BC Vocabulary.pdf",
+      "AP Calculus BC Formula sheet.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/AP Calculus BC Formula sheet.pdf",
+      "Unit 1_ Limits and Continuity.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 1_ Limits and Continuity.pdf",
+      "Unit 2_ Differentiation_ Definition... .pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 2_ Differentiation_ Definition and Fundamental Properties.pdf",
+      "Unit 3_ Differentiation_ Composite... .pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 3_ Differentiation_ Composite, Implicit and Inverse Functions.pdf",
+      "Unit 4_ Contextual Applications... .pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 4_ Contextual Applications of Differentiation.pdf",
+      "Unit 5_ Analytical Applications... .pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 5_ Analytical Applications of Differentiation.pdf",
+      "Unit 6_ Integration and Accumulation... .pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 6_ Integration and Accumulation of Change.pdf",
+      "Unit 7_ Differential Equations.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 7_ Differential Equations.pdf",
+      "Unit 8_ Applications of Integration.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 8_ Applications of Integration.pdf",
+      "Unit 9 Parametric Equations, Polar... .pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 9 Parametric Equations, Polar Coordinates, and Vector-Valued Functions.pdf",
+      "Unit 10 Infinite Sequences and Series.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/AP微积分BC/课件PDF/Unit 10 Infinite Sequences and Series.pdf"
+    },
+    "AP_CSA": {
+      "AP Computer Science A unit1.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit1.pdf",
+      "AP Computer Science A unit2.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit2.pdf",
+      "AP Computer Science A unit3.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit3.pdf",
+      "AP Computer Science A unit4.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A unit4.pdf",
+      "AP Computer Science A Midterm.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A Midterm.pdf",
+      "AP Computer Science A Final.pdf": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/04_AP_CSA_练习/练习题/AP Computer Science A Final.pdf"
+    }
+  },
+  "supplemental_courseware": {
+    "AP_CSA": {
+      "Unit 1": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/CSA/课件-AP Computer Science A/AP Computer Science A Unit 1.pdf",
+      "Unit 2": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/CSA/课件-AP Computer Science A/AP Computer Science A Unit 2.pdf",
+      "Unit 3": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/CSA/课件-AP Computer Science A/AP Computer Science A Unit 3.pdf",
+      "Unit 4": "/Users/zxydediannao/Downloads/ AP Master Library/AP打印资料大包/CSA/课件-AP Computer Science A/AP Computer Science A Unit 4.pdf"
     }
   },
   "canvas_assignment_links": {
