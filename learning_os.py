@@ -160,8 +160,8 @@ def normalize_resource_key(value):
 
 def resource_search_roots(config):
     roots = [
-        Path("/Users/zxydediannao/Downloads"),
         Path(config["workspace_root"]),
+        Path("/Users/zxydediannao/Downloads"),
         Path("/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs"),
         Path("/Users/zxydediannao/Library/Mobile Documents/iCloud~QReader~MarginStudy~easy/Documents"),
     ]
