@@ -440,6 +440,124 @@ def supplemental_courseware_resources(config, course, unit):
     return []
 
 
+def first_resource_target(resources, labels):
+    wanted = set(labels)
+    for resource in resources:
+        if resource.get("label") in wanted:
+            target = resource.get("target")
+            if target and Path(str(target)).exists():
+                return target
+    return None
+
+
+def parse_numbered_topic_range(title):
+    text = str(title or "")
+    match = re.search(r"(?<!\d)(\d+)\.(\d+)\s*-\s*(?:(\d+)\.)?(\d+)(?!\d)", text)
+    if match:
+        chapter = int(match.group(1))
+        start = f"{chapter}.{int(match.group(2))}"
+        end_chapter = int(match.group(3)) if match.group(3) else chapter
+        end = f"{end_chapter}.{int(match.group(4))}"
+        return start, end
+    match = re.search(r"(?<!\d)(\d+)\.(\d+)(?!\d)", text)
+    if match:
+        section = f"{int(match.group(1))}.{int(match.group(2))}"
+        return section, section
+    return None
+
+
+def increment_numbered_section(section):
+    match = re.match(r"^(\d+)\.(\d+)$", str(section))
+    if not match:
+        return None
+    return f"{int(match.group(1))}.{int(match.group(2)) + 1}"
+
+
+def first_heading_page(index, section, start_after=1):
+    prefix = f"{section} "
+    for page in index.get("pages", []):
+        page_no = page.get("page", 0)
+        if page_no < start_after:
+            continue
+        text = (page.get("text") or "").strip()
+        if text.startswith(prefix) or text == section:
+            return page_no
+    return None
+
+
+def numbered_courseware_page_range(index, title):
+    section_range = parse_numbered_topic_range(title)
+    if not section_range:
+        return None
+    start_section, end_section = section_range
+    start_page = first_heading_page(index, start_section, start_after=2)
+    if not start_page:
+        return None
+    next_section = increment_numbered_section(end_section)
+    next_page = first_heading_page(index, next_section, start_after=start_page + 1) if next_section else None
+    pages = index.get("pages", [])
+    last_page = pages[-1]["page"] if pages else start_page
+    end_page = (next_page - 1) if next_page else min(last_page, start_page + 40)
+    if end_page < start_page:
+        end_page = start_page
+    return [start_page, end_page], [("section_boundary", start_section), ("section_boundary", end_section)]
+
+
+def bc_semantic_courseware_page_range(unit, title):
+    unit_text = str(unit or "")
+    title_text = str(title or "")
+    if unit_text != "Unit 2":
+        return None
+    mappings = [
+        (["导数定义", "切线斜率"], [3, 16], "2.1-2.2 derivative definition and tangent slope"),
+        (["导数作为函数", "可微性"], [13, 25], "2.2-2.4 derivative as function and differentiability"),
+        (["基本求导", "幂", "积", "商"], [26, 41], "2.5-2.9 basic derivative rules"),
+        (["三角函数"], [34, 44], "2.7 and 2.10 trigonometric derivatives"),
+    ]
+    for triggers, page_range, reason in mappings:
+        if any(trigger in title_text for trigger in triggers):
+            return page_range, [("semantic_topic", reason)]
+    return None
+
+
+def courseware_excerpt_resources(config, course, unit, title, resources, row=None):
+    source = first_resource_target(resources, ["resource_index_courseware", "primary_resource", "supplemental_courseware"])
+    if not source:
+        return []
+    try:
+        index_key = f"courseware_{course}_{slug(unit)}_{hashlib.sha1(str(source).encode('utf-8')).hexdigest()[:8]}"
+        index = pdf_text_index(source, index_key)
+    except Exception:
+        return []
+    keywords = topic_print_keywords(course, unit, title, row)
+    max_pages = 10 if course == "AP_Calculus_BC" else 14
+    result = bc_semantic_courseware_page_range(unit, title) if course == "AP_Calculus_BC" else None
+    match_method = "semantic_topic" if result else "topic_keywords"
+    if not result:
+        result = numbered_courseware_page_range(index, title) if index else None
+        match_method = "section_boundary" if result else "topic_keywords"
+    if not result:
+        result = best_keyword_window(index, keywords, max_pages=max_pages, context_pages=1) if index else None
+    if result:
+        page_range, hits = result
+        start_page, end_page = page_range
+    else:
+        start_page, end_page = 1, min(max_pages, len(index.get("pages", [])) or max_pages)
+        hits = []
+        match_method = "courseware_start_fallback"
+    excerpt = create_pdf_excerpt(source, start_page, end_page, f"{course} {unit} courseware {title}")
+    if not excerpt:
+        return []
+    return [{
+        "label": "task_excerpt_courseware",
+        "target": excerpt,
+        "source": source,
+        "page_range": [start_page, end_page],
+        "match": match_method,
+        "top_hits": hits,
+    }]
+
+
 def dedupe_resources(resources):
     seen = set()
     clean = []
@@ -1015,6 +1133,14 @@ def build_csa_tasks(config, state, current_date):
             kind,
         ))
         resources.extend(supplemental_courseware_resources(config, "AP_CSA", row.get("Unit")))
+        resources.extend(courseware_excerpt_resources(
+            config,
+            "AP_CSA",
+            row.get("Unit"),
+            row.get("学习内容"),
+            resources,
+            row,
+        ))
         resources.extend(csa_excerpt_resources(config, row.get("Unit"), row.get("学习内容"), include_practice=is_practice))
         resources = dedupe_resources(resources)
         tasks.append({
@@ -1100,9 +1226,20 @@ def build_bc_tasks(config, state, current_date):
             row.get("学习内容"),
             "BC_RESOURCE_WORK",
         ))
+        resources.extend(courseware_excerpt_resources(
+            config,
+            "AP_Calculus_BC",
+            row.get("Unit"),
+            row.get("学习内容"),
+            resources,
+            row,
+        ))
         resources.extend(stewart_excerpt_resources(config, row))
         resources = dedupe_resources(resources)
-        launch_resource = primary or next(
+        launch_resource = next(
+            (r.get("target") for r in resources if r.get("label") == "task_excerpt_courseware"),
+            None
+        ) or primary or next(
             (r.get("target") for r in resources if str(r.get("label", "")).startswith("resource_index_")),
             None
         )
@@ -1292,7 +1429,7 @@ def launch_task_resources(task):
         "resource_index_vocabulary",
         "resource_index_formula_sheet",
         "question_file",
-        "task_excerpt_stewart",
+        "task_excerpt_courseware",
     ]
     resources_by_label = {}
     for resource in task.get("resources", []):
