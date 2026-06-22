@@ -1847,6 +1847,144 @@ def reset_task(args):
     print(json.dumps({"task_id": args.task, "state": "Planned"}, ensure_ascii=False, indent=2))
 
 
+def progression_runner(course, row):
+    title = str(row.get("学习内容") or "")
+    if course == "AP_CSA":
+        practice_ids = str(row.get("今日刷题编号") or "")
+        if "Q" in practice_ids and "—" not in practice_ids:
+            return "practice_runner"
+        if "复习" in practice_ids or "回顾" in title or "自批" in title:
+            return "review_runner"
+        return "concept_runner"
+    remark = str(row.get("备注") or "")
+    reference = str(row.get("课件/课本参考") or "")
+    if "单元练习" in title or "闭卷" in remark:
+        return "practice_runner"
+    if "错题" in title or "复盘" in title or "总结" in title or "词汇" in title or "公式表" in reference:
+        return "review_runner"
+    return "concept_runner"
+
+
+def workflow_phase(row):
+    phase = str(row.get("阶段") or "").strip()
+    unit = str(row.get("Unit") or "").strip()
+    return f"{phase}:{unit}" if phase and unit else phase or unit
+
+
+def canonical_bc_steps(config):
+    plan = Path(config["plans"]["AP_Calculus_BC"])
+    wb = load_workbook(plan, data_only=True, read_only=True)
+    ws = wb["每日计划"]
+    steps = []
+    global_day = 0
+    for row in row_dicts(ws, 3):
+        rng = parse_day_range(row.get("天数"))
+        if not rng:
+            continue
+        start, end = rng
+        duration = max(1, end - start + 1)
+        global_start = global_day + 1
+        global_end = global_day + duration
+        global_day = global_end
+        steps.append({
+            "course": "AP_Calculus_BC",
+            "phase": workflow_phase(row),
+            "phase_name": row.get("阶段"),
+            "unit": row.get("Unit"),
+            "day_label": row.get("天数"),
+            "global_day_range": [global_start, global_end],
+            "duration_days": duration,
+            "title": row.get("学习内容"),
+            "runner": progression_runner("AP_Calculus_BC", row),
+            "row": row,
+        })
+    return steps
+
+
+def canonical_csa_steps(config):
+    plan = Path(config["plans"]["AP_CSA"])
+    wb = load_workbook(plan, data_only=True, read_only=True)
+    ws = wb["每日刷题计划"]
+    planner = config["planner"]
+    offset = dt.timedelta(0)
+    if planner.get("csa_plan_start_date") and planner.get("csa_actual_start_date"):
+        offset = parse_date_arg(planner["csa_actual_start_date"]) - parse_date_arg(planner["csa_plan_start_date"])
+    steps = []
+    global_day = 0
+    for row in row_dicts(ws, 3):
+        if not row.get("Unit"):
+            continue
+        rng = parse_day_range(row.get("天数")) or (global_day + 1, global_day + 1)
+        duration = max(1, rng[1] - rng[0] + 1)
+        global_start = global_day + 1
+        global_end = global_day + duration
+        global_day = global_end
+        plan_date = normalize_plan_mmdd(row.get("日期"), planner["csa_year"])
+        actual_date = plan_date + offset if plan_date else None
+        steps.append({
+            "course": "AP_CSA",
+            "phase": workflow_phase(row),
+            "phase_name": row.get("阶段"),
+            "unit": row.get("Unit"),
+            "day_label": row.get("天数"),
+            "plan_date": plan_date.isoformat() if plan_date else None,
+            "actual_date": actual_date.isoformat() if actual_date else None,
+            "global_day_range": [global_start, global_end],
+            "duration_days": duration,
+            "title": row.get("学习内容"),
+            "runner": progression_runner("AP_CSA", row),
+            "practice_ids": row.get("今日刷题编号"),
+            "row": row,
+        })
+    return steps
+
+
+def step_for_date(config, course, current_date):
+    if course == "AP_CSA":
+        for step in canonical_csa_steps(config):
+            if step.get("actual_date") == current_date.isoformat():
+                return step
+        return None
+    steps = canonical_bc_steps(config)
+    anchor = config.get("planner", {}).get("bc_anchor")
+    if anchor:
+        anchor_step = next(
+            (step for step in steps if str(step["unit"]) == str(anchor.get("unit")) and str(step["day_label"]) == str(anchor.get("day"))),
+            None,
+        )
+        if not anchor_step:
+            return None
+        anchor_global_day = anchor_step["global_day_range"][0]
+        global_day = anchor_global_day + (current_date - parse_date_arg(anchor["date"])).days
+    else:
+        global_day = (current_date - parse_date_arg(config["planner"]["bc_day_1_date"])).days + 1
+    return next((step for step in steps if step["global_day_range"][0] <= global_day <= step["global_day_range"][1]), None)
+
+
+def plan_progression(args):
+    config = load_config()
+    current_date = parse_date_arg(args.date) if args.date else today_date()
+    courses = [args.course] if args.course else ["AP_Calculus_BC", "AP_CSA"]
+    selected = []
+    for course in courses:
+        step = step_for_date(config, course, current_date)
+        if step:
+            selected.append(step)
+    if args.format == "json":
+        print(json.dumps({
+            "date": current_date.isoformat(),
+            "rule": {
+                "AP_Calculus_BC": "anchor_global_day + days_since_anchor, selected by global_day_range",
+                "AP_CSA": "plan_date shifted by csa_actual_start_date - csa_plan_start_date",
+            },
+            "steps": selected,
+        }, ensure_ascii=False, indent=2))
+        return
+    print(f"date: {current_date.isoformat()}")
+    for step in selected:
+        print(f"{step['course']}\t{step['runner']}\t{step['phase']}\t{step['day_label']}\t{step['title']}")
+
+
 def cmd_today(args):
     config = load_config()
     state = load_state()
@@ -1895,6 +2033,11 @@ def main():
     p_audit.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
     p_audit.add_argument("--verbose", action="store_true")
     p_audit.set_defaults(func=audit_materials)
+    p_progression = sub.add_parser("plan-progression", help="show date -> phase/runner/plan step mapping")
+    p_progression.add_argument("--date", help="YYYY-MM-DD")
+    p_progression.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
+    p_progression.add_argument("--format", choices=["text", "json"], default="text")
+    p_progression.set_defaults(func=plan_progression)
     p_reset = sub.add_parser("reset-task", help="reset a task to Planned after accidental/test start")
     p_reset.add_argument("--task", required=True)
     p_reset.set_defaults(func=reset_task)
