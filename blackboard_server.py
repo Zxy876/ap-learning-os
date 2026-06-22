@@ -41,13 +41,16 @@ def task_rows(date_text):
 
 def render_task(task):
     resources = task.get("resources", [])
+    indexed_primary = next((
+        r for r in resources
+        if str(r.get("label", "")).startswith("resource_index_")
+        and r.get("target")
+    ), None)
     primary = next((
         r for r in resources
         if str(r.get("label", "")).startswith("task_excerpt")
         and not (task.get("course") == "AP_CSA" and r.get("label") == "task_excerpt_java_illuminated")
     ), None)
-    unit_page = next((r for r in resources if r.get("label") == "local_unit_page"), None)
-    print_packet = next((r for r in resources if str(r.get("label", "")).startswith("supplemental_print_packet")), None)
     launch_url = next((x.get("target") for x in task.get("launch", []) if x.get("type") == "url"), None)
     state_class = esc(task.get("state", ""))
     parts = [
@@ -67,20 +70,22 @@ def render_task(task):
     ]
     if launch_url:
         parts.append(f'<a href="/api/open?target={urllib.parse.quote(launch_url)}">Khan</a>')
+    if indexed_primary:
+        parts.append(f'<a href="/api/open?target={urllib.parse.quote(indexed_primary["target"])}">Indexed Resource</a>')
     if primary:
         parts.append(f'<a href="/api/open?target={urllib.parse.quote(primary["target"])}">Task PDF</a>')
-    if unit_page:
-        parts.append(f'<a href="/api/open?target={urllib.parse.quote(unit_page["target"])}">Unit Page</a>')
-    if print_packet:
-        parts.append(f'<a href="/api/open?target={urllib.parse.quote(print_packet["target"])}">Print Packet</a>')
     parts.append('</div>')
     parts.append('<details><summary>Resources</summary><ul>')
     for r in resources:
         label = esc(r.get("label"))
         target = esc(r.get("target"))
+        index_name = esc(r.get("index_filename"))
         page_range = r.get("page_range")
         suffix = f' <span class="pages">p{page_range[0]}-{page_range[1]}</span>' if page_range else ''
-        parts.append(f'<li><a href="/api/open?target={urllib.parse.quote(r.get("target", ""))}">{label}</a>{suffix}<br><code>{target}</code></li>')
+        if r.get("target"):
+            parts.append(f'<li><a href="/api/open?target={urllib.parse.quote(r.get("target", ""))}">{label}</a>{suffix}<br><code>{target}</code></li>')
+        else:
+            parts.append(f'<li>{label} <strong>MISSING</strong>{suffix}<br><code>{index_name}</code></li>')
     parts.append('</ul></details>')
     parts.append('</section>')
     return "\n".join(parts)

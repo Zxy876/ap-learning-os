@@ -22,6 +22,7 @@ CONFIG_PATH = BASE / "config.json"
 STATE_PATH = BASE / "data" / "state.json"
 BLACKBOARD_PATH = BASE / "blackboard" / "today.md"
 TASK_MATERIALS_DIR = BASE / "task_materials"
+RESOURCE_RESOLUTION_CACHE = {}
 
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
@@ -152,11 +153,236 @@ def local_fallback_resources(config, course, unit, include_practice=False):
     return resources
 
 
+def normalize_resource_key(value):
+    text = str(value or "").lower().replace("…", "").replace("...", "")
+    return re.sub(r"[^a-z0-9一-龥]+", "", text)
+
+
+def resource_search_roots(config):
+    roots = [
+        Path(config["workspace_root"]),
+        Path("/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs"),
+        Path("/Users/zxydediannao/Library/Mobile Documents/iCloud~QReader~MarginStudy~easy/Documents"),
+    ]
+    clean = []
+    seen = set()
+    for root in roots:
+        if root.exists() and root not in seen:
+            seen.add(root)
+            clean.append(root)
+    return clean
+
+
+def is_generated_material(path):
+    try:
+        Path(path).resolve().relative_to(TASK_MATERIALS_DIR.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def resource_aliases(config):
+    canonical = config.get("canonical_materials", {})
+    aliases = {
+        "AP_Calculus_BC": {
+            "James Stewart - Calculus Early Transcendentals 8th.pdf":
+                canonical.get("AP_Calculus_BC", {}).get("stewart_textbook"),
+        },
+        "AP_CSA": {
+            "JAVA Illuminated.pdf":
+                canonical.get("AP_CSA", {}).get("java_textbook"),
+        }
+    }
+    aliases.update(config.get("resource_index_aliases", {}))
+    return aliases
+
+
+def resource_index_entries(config, course):
+    plan = Path(config["plans"][course])
+    sheet = "资源索引"
+    wb = load_workbook(plan, data_only=True, read_only=True)
+    ws = wb[sheet]
+    headers = [cell.value for cell in ws[3]]
+    entries = []
+    path_col = "完整路径" if "完整路径" in headers else "路径"
+    for row_number, row in enumerate(ws.iter_rows(min_row=4, values_only=True), start=4):
+        if not any(v not in (None, "") for v in row):
+            continue
+        data = {headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
+        filename = str(data.get("文件名") or "").strip()
+        if not filename:
+            continue
+        entries.append({
+            "course": course,
+            "row": row_number,
+            "category": str(data.get("类别") or "").strip(),
+            "filename": filename,
+            "path_hint": str(data.get(path_col) or "").strip(),
+            "unit": str(data.get("对应单元") or "").strip(),
+            "note": str(data.get("说明") or "").strip(),
+        })
+    return entries
+
+
+def unit_matches(resource_unit, task_unit):
+    text = str(resource_unit or "").strip()
+    task = str(task_unit or "").strip()
+    if not text or text in {"全部", "Unit 1-10"}:
+        return True
+    if not task:
+        return False
+    if text == task:
+        return True
+    nums = [int(n) for n in re.findall(r"\d+", text)]
+    task_nums = [int(n) for n in re.findall(r"\d+", task)]
+    if not nums or not task_nums:
+        return False
+    task_num = task_nums[0]
+    if "-" in text and len(nums) >= 2:
+        return nums[0] <= task_num <= nums[1]
+    return task_num in nums
+
+
+def direct_resource_candidate(root, path_hint, filename):
+    rel_parts = []
+    if path_hint:
+        rel_parts.extend(p for p in str(path_hint).replace("\\", "/").split("/") if p)
+    clean_filename = str(filename).replace("\\", "/").strip("/")
+    if clean_filename:
+        rel_parts.append(Path(clean_filename).name)
+    if not rel_parts:
+        return None
+    return root.joinpath(*rel_parts)
+
+
+def file_tokens(filename):
+    stem = Path(str(filename).replace("\\", "/")).stem.replace("...", " ")
+    return [
+        normalize_resource_key(token)
+        for token in re.split(r"[^A-Za-z0-9一-龥]+", stem)
+        if len(normalize_resource_key(token)) >= 3
+    ]
+
+
+def strict_resource_match(entry, candidate):
+    if is_generated_material(candidate):
+        return 0
+    filename = entry["filename"].replace("\\", "/").rstrip("/")
+    wants_dir = entry["filename"].endswith("\\") or entry["filename"].endswith("/")
+    if wants_dir and not candidate.is_dir():
+        return 0
+    if not wants_dir and not candidate.is_file():
+        return 0
+    expected_suffix = Path(filename).suffix.lower()
+    if expected_suffix and candidate.suffix.lower() != expected_suffix:
+        return 0
+    path_text = str(candidate).lower()
+    if entry["course"] == "AP_Calculus_BC" and entry["category"] in {"真题", "模考"}:
+        if "calculus" not in path_text and "calc" not in path_text:
+            return 0
+    if entry["course"] == "AP_CSA" and entry["category"] in {"真题", "模考"}:
+        if "csa" not in path_text and "computer science" not in path_text:
+            return 0
+    expected = normalize_resource_key(Path(filename).name)
+    actual = normalize_resource_key(candidate.name)
+    if expected and actual == expected:
+        return 1000
+    if wants_dir and expected and expected in actual:
+        return 800
+    if "..." not in entry["filename"] and "…" not in entry["filename"]:
+        return 0
+    tokens = file_tokens(entry["filename"])
+    if not tokens:
+        return 0
+    hits = sum(1 for token in tokens if token in actual)
+    if hits == len(tokens):
+        return 700 + hits
+    return 0
+
+
+def resolve_index_resource(config, entry):
+    cache_key = (entry["course"], entry["filename"], entry.get("path_hint", ""))
+    if cache_key in RESOURCE_RESOLUTION_CACHE:
+        return RESOURCE_RESOLUTION_CACHE[cache_key]
+    alias = resource_aliases(config).get(entry["course"], {}).get(entry["filename"])
+    if alias and Path(alias).exists():
+        RESOURCE_RESOLUTION_CACHE[cache_key] = str(Path(alias))
+        return RESOURCE_RESOLUTION_CACHE[cache_key]
+    for root in resource_search_roots(config):
+        direct = direct_resource_candidate(root, entry.get("path_hint"), entry["filename"])
+        if direct and direct.exists() and not is_generated_material(direct):
+            RESOURCE_RESOLUTION_CACHE[cache_key] = str(direct)
+            return RESOURCE_RESOLUTION_CACHE[cache_key]
+    best = None
+    best_score = 0
+    for root in resource_search_roots(config):
+        for candidate in root.rglob("*"):
+            score = strict_resource_match(entry, candidate)
+            if score > best_score:
+                best = candidate
+                best_score = score
+    RESOURCE_RESOLUTION_CACHE[cache_key] = str(best) if best else None
+    return RESOURCE_RESOLUTION_CACHE[cache_key]
+
+
+RESOURCE_LABELS = {
+    "课本": "textbook",
+    "教材": "textbook",
+    "大纲": "syllabus",
+    "课件": "courseware",
+    "练习": "practice",
+    "测试": "test",
+    "真题": "frq",
+    "模考": "mock_exam",
+    "词汇": "vocabulary",
+    "公式表": "formula_sheet",
+    "刷题": "checklist",
+}
+
+
+def task_needs_practice(title, kind=None):
+    text = f"{title or ''} {kind or ''}"
+    return any(term in text for term in ["练习", "刷题", "Practice", "FRQ", "题", "测试", "模考", "Midterm", "Final"])
+
+
+def resource_index_resources(config, course, unit, title="", kind=None):
+    include_practice = task_needs_practice(title, kind)
+    resources = []
+    for entry in resource_index_entries(config, course):
+        category = entry["category"]
+        if not unit_matches(entry["unit"], unit):
+            continue
+        if category in {"真题", "模考"} and not task_needs_practice(title, kind):
+            continue
+        if category == "测试" and not any(term in f"{title} {kind}" for term in ["测试", "模考", "Midterm", "Final"]):
+            continue
+        if category == "练习" and course == "AP_Calculus_BC" and not include_practice:
+            continue
+        target = resolve_index_resource(config, entry)
+        label = f"resource_index_{RESOURCE_LABELS.get(category, slug(category))}"
+        resource = {
+            "label": label,
+            "target": target,
+            "source": "workbook_resource_index",
+            "index_filename": entry["filename"],
+            "index_category": category,
+            "index_unit": entry["unit"],
+            "index_row": entry["row"],
+        }
+        if target:
+            resources.append(resource)
+        else:
+            resources.append({**resource, "missing": True, "target": ""})
+    return resources
+
+
 def dedupe_resources(resources):
     seen = set()
     clean = []
     for resource in resources:
         target = resource.get("target")
+        if not target and resource.get("missing"):
+            target = f"missing:{resource.get('label')}:{resource.get('index_filename')}"
         if not target or target in seen:
             continue
         seen.add(target)
@@ -717,9 +943,14 @@ def build_csa_tasks(config, state, current_date):
             found = find_existing_path(config, row.get(col))
             if found:
                 resources.append({"label": label, "target": found})
+        resources.extend(resource_index_resources(
+            config,
+            "AP_CSA",
+            row.get("Unit"),
+            row.get("学习内容"),
+            kind,
+        ))
         resources.extend(csa_excerpt_resources(config, row.get("Unit"), row.get("学习内容"), include_practice=is_practice))
-        resources.extend(topic_print_packet_resources(config, "AP_CSA", row.get("Unit"), row.get("学习内容"), row))
-        resources.extend(local_fallback_resources(config, "AP_CSA", row.get("Unit"), include_practice=is_practice))
         resources = dedupe_resources(resources)
         tasks.append({
             "id": f"CSA-{current_date.isoformat()}-{slug(row.get('天数'))}-{kind}",
@@ -797,10 +1028,19 @@ def build_bc_tasks(config, state, current_date):
             target = find_existing_path(config, row.get(col))
             if target:
                 resources.append({"label": label, "target": target})
+        resources.extend(resource_index_resources(
+            config,
+            "AP_Calculus_BC",
+            row.get("Unit"),
+            row.get("学习内容"),
+            "BC_RESOURCE_WORK",
+        ))
         resources.extend(stewart_excerpt_resources(config, row))
-        resources.extend(topic_print_packet_resources(config, "AP_Calculus_BC", row.get("Unit"), row.get("学习内容"), row))
-        resources.extend(local_fallback_resources(config, "AP_Calculus_BC", row.get("Unit"), include_practice=True))
         resources = dedupe_resources(resources)
+        launch_resource = primary or next(
+            (r.get("target") for r in resources if str(r.get("label", "")).startswith("resource_index_")),
+            None
+        )
         tasks.append({
             "id": f"BC-{current_date.isoformat()}-DAY{global_day_number}-{slug(row.get('Unit'))}",
             "task_key": task_key,
@@ -823,7 +1063,7 @@ def build_bc_tasks(config, state, current_date):
             "launch": [
                 {"type": "url", "target": config["urls"].get("khan_calculus_bc_units", {}).get(str(row.get("Unit")), config["urls"]["khan_calculus_bc"])},
                 {"type": "app", "target": config["apps"]["notes"]},
-                {"type": "resource", "target": primary} if primary else {"type": "app", "target": config["apps"]["pdf"]}
+                {"type": "resource", "target": launch_resource} if launch_resource else {"type": "app", "target": config["apps"]["pdf"]}
             ],
             "source": {
                 "workbook": str(plan),
@@ -973,13 +1213,18 @@ def launch_item(item):
 
 def launch_task_resources(task):
     open_label_order = [
-        "local_unit_page",
-        "local_workbook",
-        "local_practice_pdf",
+        "resource_index_courseware",
+        "resource_index_syllabus",
+        "resource_index_textbook",
+        "resource_index_practice",
+        "resource_index_test",
+        "resource_index_frq",
+        "resource_index_mock_exam",
+        "resource_index_checklist",
+        "resource_index_vocabulary",
+        "resource_index_formula_sheet",
         "question_file",
         "task_excerpt_stewart",
-        "supplemental_print_packet_bc",
-        "supplemental_print_packet_csa",
     ]
     resources_by_label = {}
     for resource in task.get("resources", []):
@@ -1242,16 +1487,38 @@ def material_report(args):
             label = resource.get("label")
             target = resource.get("target")
             if args.core_only and not (
+                str(label).startswith("resource_index_")
+                or
                 str(label).startswith("task_excerpt")
-                or str(label).startswith("supplemental_print_packet")
-                or label in {"question_file", "local_practice_pdf", "local_unit_page"}
+                or label in {"question_file"}
             ):
                 continue
             exists = Path(target).exists() if target else False
             page_range = resource.get("page_range")
             page_text = f" p{page_range[0]}-{page_range[1]}" if page_range else ""
-            print(f"- {label}{page_text}: {'OK' if exists else 'MISSING'}")
-            print(f"  {target}")
+            index_name = f" ({resource.get('index_filename')})" if resource.get("missing") else ""
+            print(f"- {label}{page_text}{index_name}: {'OK' if exists else 'MISSING'}")
+            print(f"  {target or resource.get('index_unit') or ''}")
+
+
+def resource_index_report(args):
+    config = load_config()
+    courses = [args.course] if args.course else ["AP_Calculus_BC", "AP_CSA"]
+    summary = {"found": 0, "missing": 0}
+    for course in courses:
+        print(f"\n{course} 资源索引")
+        for entry in resource_index_entries(config, course):
+            target = resolve_index_resource(config, entry)
+            if target:
+                summary["found"] += 1
+                print(f"OK\t{entry['category']}\t{entry['unit']}\t{entry['filename']}")
+                if args.verbose:
+                    print(f"  {target}")
+            else:
+                summary["missing"] += 1
+                print(f"MISSING\t{entry['category']}\t{entry['unit']}\t{entry['filename']}")
+                print(f"  index path: {entry.get('path_hint')}")
+    print(json.dumps(summary, ensure_ascii=False))
 
 
 def resource_text(resource, max_pages=3):
@@ -1276,37 +1543,28 @@ def audit_task_materials(task):
     course = task.get("course")
     title = task.get("title", "")
     kind = task.get("kind", "")
-    supplemental = [r for r in resources if str(r.get("label", "")).startswith("supplemental_print_packet")]
-    if course in {"AP_CSA", "AP_Calculus_BC"} and not supplemental:
-        warnings.append("no reliable supplemental Print Packet; workflow will rely on fallback resources")
+    indexed = [r for r in resources if str(r.get("label", "")).startswith("resource_index_")]
+    if course in {"AP_CSA", "AP_Calculus_BC"} and not indexed:
+        issues.append("no resource-index material resolved for this task")
     for resource in resources:
         target = resource.get("target")
+        if resource.get("missing"):
+            issues.append(f"missing resource-index file: {resource.get('index_filename')}")
         if target and not Path(target).exists():
             issues.append(f"missing file: {resource.get('label')}")
     if course == "AP_CSA" and kind == "CSA_CONCEPT":
-        opened_labels = {"local_workbook", "local_unit_page", "local_practice_pdf", "question_file", "supplemental_print_packet_csa"}
+        opened_labels = {
+            "resource_index_syllabus",
+            "resource_index_textbook",
+            "resource_index_practice",
+            "resource_index_checklist",
+            "question_file",
+        }
         if any(r.get("label") == "task_excerpt_java_illuminated" for r in resources):
             # Java reference is allowed, but it must not be part of launch_task_resources.
             pass
-        for resource in supplemental:
-            text = resource_text(resource).lower()
-            if (
-                "practice exam" in text
-                or "test booklet" in text
-                or "scoring guide" in text
-                or "answer key" in text
-                or "practice book" in text
-            ):
-                issues.append("CSA concept Print Packet appears to point at practice/exam material")
-            if "unit 1" in title and "unit 1" not in text and "using objects" not in text:
-                issues.append("CSA Unit 1 Print Packet lacks Unit 1/Using Objects signal")
         if not any(r.get("label") in opened_labels for r in resources):
             issues.append("CSA task has no launchable primary material")
-    if course == "AP_Calculus_BC":
-        for resource in supplemental:
-            text = resource_text(resource).lower()
-            if "scoring guidelines" in text or "free-response questions" in text:
-                issues.append("BC Print Packet appears to point at FRQ/scoring material")
     return issues, warnings
 
 
@@ -1400,6 +1658,10 @@ def main():
     p_materials.add_argument("--date")
     p_materials.add_argument("--core-only", action="store_true")
     p_materials.set_defaults(func=material_report)
+    p_resolve = sub.add_parser("resolve-resources", help="resolve workbook resource-index files on this Mac")
+    p_resolve.add_argument("--course", choices=["AP_Calculus_BC", "AP_CSA"])
+    p_resolve.add_argument("--verbose", action="store_true")
+    p_resolve.set_defaults(func=resource_index_report)
     p_audit = sub.add_parser("audit-materials", help="audit future task material mappings without changing state")
     p_audit.add_argument("--start", help="YYYY-MM-DD")
     p_audit.add_argument("--days", type=int, default=60)
