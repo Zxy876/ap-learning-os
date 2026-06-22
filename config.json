@@ -103,7 +103,43 @@
   "resource_index_aliases": {
     "AP_Calculus_BC": {
       "AP Calculus BC Vocabulary.pdf": "/Users/zxydediannao/Downloads/AP Cal BC 词汇表.pdf",
-      "AP Calculus BC Formula sheet.pdf": "/Users/zxydediannao/Downloads/AP Calculus BC Formula.pdf"
+      "AP Calculus BC Formula sheet.pdf": "/Users/zxydediannao/Downloads/AP Calculus BC Formula.pdf",
+      "Unit 9 Parametric Equations, Polar... .pdf": "/Users/zxydediannao/Downloads/Unit 9 Learning Objectives (1).pdf",
+      "Unit 10 Infinite Sequences and Series.pdf": "/Users/zxydediannao/Downloads/Unit 10 Learning Objectives.pdf"
+    }
+  },
+  "canvas_assignment_links": {
+    "AP_Calculus_BC": {
+      "practice": {
+        "Unit 1": "https://thepageschool.instructure.com/courses/14724/assignments/269272?module_item_id=1395083",
+        "Unit 2": "https://thepageschool.instructure.com/courses/14724/assignments/269274?module_item_id=1395086",
+        "Unit 3": "https://thepageschool.instructure.com/courses/14724/assignments/269275?module_item_id=1395089",
+        "Unit 4": "https://thepageschool.instructure.com/courses/14724/assignments/269276?module_item_id=1395092",
+        "Unit 5": "https://thepageschool.instructure.com/courses/14724/assignments/269277?module_item_id=1395095",
+        "Unit 6": "https://thepageschool.instructure.com/courses/14724/assignments/269278?module_item_id=1395099",
+        "Unit 7": "https://thepageschool.instructure.com/courses/14724/assignments/269279?module_item_id=1395102",
+        "Unit 8": "https://thepageschool.instructure.com/courses/14724/assignments/269280?module_item_id=1395105",
+        "Unit 9": "https://thepageschool.instructure.com/courses/14724/assignments/269281?module_item_id=1395107",
+        "Unit 10": "https://thepageschool.instructure.com/courses/14724/assignments/269273?module_item_id=1395109"
+      },
+      "test": {
+        "Midterm": "https://thepageschool.instructure.com/courses/14724/assignments/269270?module_item_id=1395096",
+        "Final": "https://thepageschool.instructure.com/courses/14724/assignments/269268?module_item_id=1395110"
+      },
+      "metadata": {
+        "Unit 1": {"expected_title": "BC Unit 1 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 2": {"expected_title": "BC Unit 2 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 3": {"expected_title": "BC Unit 3 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 4": {"expected_title": "BC Unit 4 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 5": {"expected_title": "BC Unit 5 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 6": {"expected_title": "BC Unit 6 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 7": {"expected_title": "BC Unit 7 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 8": {"expected_title": "BC Unit 8 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 9": {"expected_title": "BC Unit 9 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Unit 10": {"expected_title": "BC Unit 10 Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Midterm": {"expected_title": "BC Midterm Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."},
+        "Final": {"expected_title": "BC Final Homework / Practice", "title_verified": false, "verification_note": "HTTP title check redirects to Canvas Login; verify after browser login."}
+      }
     }
   },
   "canonical_materials": {

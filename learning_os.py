@@ -199,6 +199,14 @@ def resource_aliases(config):
     return aliases
 
 
+def is_url(target):
+    return str(target or "").startswith(("http://", "https://"))
+
+
+def target_exists(target):
+    return bool(target) and (is_url(target) or Path(target).exists())
+
+
 def resource_index_entries(config, course):
     plan = Path(config["plans"][course])
     sheet = "资源索引"
@@ -327,6 +335,40 @@ def resolve_index_resource(config, entry):
     return RESOURCE_RESOLUTION_CACHE[cache_key]
 
 
+def canvas_assignment_url(config, entry):
+    course_links = config.get("canvas_assignment_links", {}).get(entry["course"], {})
+    if entry["category"] == "练习":
+        return course_links.get("practice", {}).get(entry["unit"])
+    if entry["category"] == "测试":
+        filename = entry["filename"].lower()
+        if "midterm" in filename:
+            return course_links.get("test", {}).get("Midterm")
+        if "final" in filename:
+            return course_links.get("test", {}).get("Final")
+    return None
+
+
+def canvas_assignment_metadata(config, entry):
+    course_links = config.get("canvas_assignment_links", {}).get(entry["course"], {})
+    key = None
+    if entry["category"] == "练习":
+        key = entry["unit"]
+    elif entry["category"] == "测试":
+        filename = entry["filename"].lower()
+        if "midterm" in filename:
+            key = "Midterm"
+        elif "final" in filename:
+            key = "Final"
+    meta = course_links.get("metadata", {}).get(key, {})
+    return meta if isinstance(meta, dict) else {}
+
+
+def canvas_assignment_inferred(config, entry):
+    inferred = config.get("canvas_assignment_links", {}).get(entry["course"], {}).get("inferred", [])
+    target = canvas_assignment_url(config, entry)
+    return bool(target and target in inferred)
+
+
 RESOURCE_LABELS = {
     "课本": "textbook",
     "教材": "textbook",
@@ -362,15 +404,23 @@ def resource_index_resources(config, course, unit, title="", kind=None):
             continue
         target = resolve_index_resource(config, entry)
         label = f"resource_index_{RESOURCE_LABELS.get(category, slug(category))}"
+        canvas_url = canvas_assignment_url(config, entry) if not target else None
+        if canvas_url:
+            label = f"{label}_canvas"
+            target = canvas_url
         resource = {
             "label": label,
             "target": target,
-            "source": "workbook_resource_index",
+            "source": "canvas_assignment_links" if canvas_url else "workbook_resource_index",
             "index_filename": entry["filename"],
             "index_category": category,
             "index_unit": entry["unit"],
             "index_row": entry["row"],
         }
+        if canvas_url and canvas_assignment_inferred(config, entry):
+            resource["inferred"] = True
+        if canvas_url:
+            resource.update(canvas_assignment_metadata(config, entry))
         if target:
             resources.append(resource)
         else:
@@ -1218,7 +1268,9 @@ def launch_task_resources(task):
         "resource_index_courseware",
         "resource_index_syllabus",
         "resource_index_textbook",
+        "resource_index_practice_canvas",
         "resource_index_practice",
+        "resource_index_test_canvas",
         "resource_index_test",
         "resource_index_frq",
         "resource_index_mock_exam",
@@ -1234,7 +1286,9 @@ def launch_task_resources(task):
     for label in open_label_order:
         for resource in resources_by_label.get(label, []):
             target = resource.get("target")
-            if target and Path(target).exists():
+            if is_url(target):
+                subprocess.Popen(["open", target])
+            elif target and Path(target).exists():
                 subprocess.Popen(["open", target])
 
 
@@ -1495,7 +1549,7 @@ def material_report(args):
                 or label in {"question_file"}
             ):
                 continue
-            exists = Path(target).exists() if target else False
+            exists = target_exists(target)
             page_range = resource.get("page_range")
             page_text = f" p{page_range[0]}-{page_range[1]}" if page_range else ""
             index_name = f" ({resource.get('index_filename')})" if resource.get("missing") else ""
@@ -1511,11 +1565,20 @@ def resource_index_report(args):
         print(f"\n{course} 资源索引")
         for entry in resource_index_entries(config, course):
             target = resolve_index_resource(config, entry)
+            canvas_url = canvas_assignment_url(config, entry) if not target else None
             if target:
                 summary["found"] += 1
                 print(f"OK\t{entry['category']}\t{entry['unit']}\t{entry['filename']}")
                 if args.verbose:
                     print(f"  {target}")
+            elif canvas_url:
+                summary["found"] += 1
+                print(f"CANVAS\t{entry['category']}\t{entry['unit']}\t{entry['filename']}")
+                if args.verbose:
+                    meta = canvas_assignment_metadata(config, entry)
+                    print(f"  {canvas_url}")
+                    print(f"  expected title: {meta.get('expected_title', '')}")
+                    print(f"  title verified: {meta.get('title_verified', False)}")
             else:
                 summary["missing"] += 1
                 print(f"MISSING\t{entry['category']}\t{entry['unit']}\t{entry['filename']}")
@@ -1552,7 +1615,7 @@ def audit_task_materials(task):
         target = resource.get("target")
         if resource.get("missing"):
             issues.append(f"missing resource-index file: {resource.get('index_filename')}")
-        if target and not Path(target).exists():
+        if target and not target_exists(target):
             issues.append(f"missing file: {resource.get('label')}")
     if course == "AP_CSA" and kind == "CSA_CONCEPT":
         opened_labels = {
