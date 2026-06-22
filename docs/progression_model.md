@@ -171,3 +171,44 @@ JSON form:
 python3 learning_os.py plan-progression --date 2026-06-22 --format json
 ```
 
+## Phase Pool Command
+
+Use this command to inspect the generated phase pools:
+
+```bash
+python3 learning_os.py plan-phases
+```
+
+Course-specific:
+
+```bash
+python3 learning_os.py plan-phases --course AP_Calculus_BC
+python3 learning_os.py plan-phases --course AP_CSA --format json
+```
+
+The phase pool is grouped by:
+
+```text
+course + phase + unit
+```
+
+Each pool contains:
+
+- canonical plan steps from the workbook
+- runner distribution
+- all resource-index materials for that unit/phase
+
+## Implemented Runtime Flow
+
+The active task builders now use this order:
+
+```text
+build_*_tasks(date)
+  -> step_for_date(course, date)
+  -> canonical_*_steps(workbook)
+  -> progression_runner(course, row)
+  -> task_kind_for_runner(course, runner)
+  -> resource resolution and material slicing
+```
+
+This means the date allocator no longer scans files first. It selects the plan step first, then the runner and material resolver act on that selected row.

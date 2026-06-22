@@ -4,7 +4,7 @@
   "workspace_root": "/Users/zxydediannao/Downloads/ AP Master Library",
   "plans": {
     "AP_CSA": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/心悦/AP_CSA_学习计划.xlsx",
-    "AP_Calculus_BC": "/Users/zxydediannao/Library/Mobile Documents/com~apple~CloudDocs/心悦/AP_Calculus_BC_学习计划.xlsx"
+    "AP_Calculus_BC": "/Users/zxydediannao/Downloads/AP_Calculus_BC_学习计划.xlsx"
   },
   "planner": {
     "bc_day_1_date": "2026-06-22",
@@ -20,9 +20,11 @@
     "default_targets_min": {
       "BC_RESOURCE_WORK": 45,
       "BC_PRACTICE": 40,
+      "BC_REVIEW": 30,
       "BC_ERROR_LOG": 15,
       "CSA_CONCEPT": 35,
       "CSA_PRACTICE": 30,
+      "CSA_REVIEW": 25,
       "CSA_ERROR_LOG": 15
     },
     "AP_CSA": {

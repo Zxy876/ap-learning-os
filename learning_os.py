@@ -1099,183 +1099,174 @@ def topic_print_packet_resources(config, course, unit, title, row=None):
         "note": packet.get("note", "")
     }]
 
+
+def task_kind_for_runner(course, runner):
+    if course == "AP_CSA":
+        return {
+            "concept_runner": "CSA_CONCEPT",
+            "practice_runner": "CSA_PRACTICE",
+            "review_runner": "CSA_REVIEW",
+            "frq_runner": "CSA_PRACTICE",
+            "mock_exam_runner": "CSA_PRACTICE",
+        }.get(runner, "CSA_CONCEPT")
+    return {
+        "concept_runner": "BC_RESOURCE_WORK",
+        "practice_runner": "BC_PRACTICE",
+        "review_runner": "BC_REVIEW",
+        "frq_runner": "BC_PRACTICE",
+        "mock_exam_runner": "BC_PRACTICE",
+    }.get(runner, "BC_RESOURCE_WORK")
+
+
+def default_minutes_for_kind(config, kind):
+    return config["planner"]["default_targets_min"].get(kind, config["planner"]["default_targets_min"].get("BC_RESOURCE_WORK", 45))
+
+
 def build_csa_tasks(config, state, current_date):
     plan = Path(config["plans"]["AP_CSA"])
-    wb = load_workbook(plan, data_only=True, read_only=True)
-    ws = wb["每日刷题计划"]
-    tasks = []
-    planner = config["planner"]
-    csa_date_offset = dt.timedelta(0)
-    if planner.get("csa_plan_start_date") and planner.get("csa_actual_start_date"):
-        csa_date_offset = parse_date_arg(planner["csa_actual_start_date"]) - parse_date_arg(planner["csa_plan_start_date"])
-    for row in row_dicts(ws, 3):
-        row_date = normalize_plan_mmdd(row.get("日期"), planner["csa_year"])
-        if row_date:
-            row_date = row_date + csa_date_offset
-        if row_date != current_date:
-            continue
-        practice_ids = str(row.get("今日刷题编号") or "")
-        is_practice = "—" not in practice_ids and practice_ids.strip() not in {"", "-"}
-        kind = "CSA_PRACTICE" if is_practice else "CSA_CONCEPT"
-        default_min = config["planner"]["default_targets_min"][kind]
-        task_key = f"CSA:{row.get('Unit')}:{row.get('天数')}:{kind}"
-        target_min = adaptive_minutes(state, task_key, default_min, config)
-        resources = []
-        for label, col in [("question_file", "题目文件"), ("answer_file", "答案文件")]:
-            found = find_existing_path(config, row.get(col))
-            if found:
-                resources.append({"label": label, "target": found})
-        resources.extend(resource_index_resources(
-            config,
-            "AP_CSA",
-            row.get("Unit"),
-            row.get("学习内容"),
-            kind,
-        ))
-        resources.extend(supplemental_courseware_resources(config, "AP_CSA", row.get("Unit")))
-        resources.extend(courseware_excerpt_resources(
-            config,
-            "AP_CSA",
-            row.get("Unit"),
-            row.get("学习内容"),
-            resources,
-            row,
-        ))
-        resources.extend(csa_excerpt_resources(config, row.get("Unit"), row.get("学习内容"), include_practice=is_practice))
-        resources = dedupe_resources(resources)
-        tasks.append({
-            "id": f"CSA-{current_date.isoformat()}-{slug(row.get('天数'))}-{kind}",
-            "task_key": task_key,
-            "course": "AP_CSA",
-            "kind": kind,
-            "state": "Planned",
-            "date": current_date.isoformat(),
-            "unit": row.get("Unit"),
-            "title": f"CSA {row.get('Unit')} {row.get('天数')} - {row.get('学习内容')}",
-            "target_min": target_min,
-            "observable_goal": (
-                f"Open CSA materials for {row.get('学习内容')} and work for at least {target_min} minutes."
-            ),
-            "completion_criteria": [
-                f"CSA-related resource/window remains active for about {target_min} minutes",
-                "Start/end screenshots exist",
-                "uone reviews evidence and overwrites final status"
-            ],
-            "resources": resources,
-            "launch": [
-                {"type": "url", "target": config["urls"]["khan_ap_csa"]},
-                {"type": "app", "target": config["apps"]["notes"]},
-                {"type": "app", "target": config["apps"]["editor"]}
-            ],
-            "source": {"workbook": str(plan), "sheet": "每日刷题计划", "row": row},
-        })
-    return tasks
+    step = step_for_date(config, "AP_CSA", current_date)
+    if not step:
+        return []
+    row = step["row"]
+    runner = step["runner"]
+    kind = task_kind_for_runner("AP_CSA", runner)
+    practice_ids = str(row.get("今日刷题编号") or "")
+    is_practice = runner in {"practice_runner", "frq_runner", "mock_exam_runner"}
+    default_min = default_minutes_for_kind(config, kind)
+    task_key = f"CSA:{step['phase']}:{row.get('天数')}:{runner}"
+    target_min = adaptive_minutes(state, task_key, default_min, config)
+    resources = []
+    for label, col in [("question_file", "题目文件"), ("answer_file", "答案文件")]:
+        found = find_existing_path(config, row.get(col))
+        if found:
+            resources.append({"label": label, "target": found})
+    resources.extend(resource_index_resources(
+        config,
+        "AP_CSA",
+        row.get("Unit"),
+        row.get("学习内容"),
+        kind,
+    ))
+    resources.extend(supplemental_courseware_resources(config, "AP_CSA", row.get("Unit")))
+    resources.extend(courseware_excerpt_resources(
+        config,
+        "AP_CSA",
+        row.get("Unit"),
+        row.get("学习内容"),
+        resources,
+        row,
+    ))
+    resources.extend(csa_excerpt_resources(config, row.get("Unit"), row.get("学习内容"), include_practice=is_practice))
+    resources = dedupe_resources(resources)
+    return [{
+        "id": f"CSA-{current_date.isoformat()}-{slug(row.get('天数'))}-{kind}",
+        "task_key": task_key,
+        "course": "AP_CSA",
+        "kind": kind,
+        "runner": runner,
+        "phase": step["phase"],
+        "state": "Planned",
+        "date": current_date.isoformat(),
+        "unit": row.get("Unit"),
+        "title": f"CSA {row.get('Unit')} {row.get('天数')} - {row.get('学习内容')}",
+        "target_min": target_min,
+        "observable_goal": (
+            f"Open CSA materials for {row.get('学习内容')} and work for at least {target_min} minutes."
+        ),
+        "completion_criteria": [
+            f"CSA-related resource/window remains active for about {target_min} minutes",
+            "Start/end screenshots exist",
+            "uone reviews evidence and overwrites final status"
+        ],
+        "resources": resources,
+        "launch": [
+            {"type": "url", "target": config["urls"]["khan_ap_csa"]},
+            {"type": "app", "target": config["apps"]["notes"]},
+            {"type": "app", "target": config["apps"]["editor"]}
+        ],
+        "source": {"workbook": str(plan), "sheet": "每日刷题计划", "row": row, "plan_step": step},
+    }]
 
 
 def build_bc_tasks(config, state, current_date):
     plan = Path(config["plans"]["AP_Calculus_BC"])
-    wb = load_workbook(plan, data_only=True, read_only=True)
-    ws = wb["每日计划"]
-    bc_rows = []
-    cumulative_day = 0
-    for row in row_dicts(ws, 3):
-        rng = parse_day_range(row.get("天数"))
-        if not rng:
-            continue
-        start, end = rng
-        duration_days = max(1, end - start + 1)
-        global_start = cumulative_day + 1
-        global_end = cumulative_day + duration_days
-        cumulative_day = global_end
-        bc_rows.append((row, global_start, global_end))
-    anchor = config.get("planner", {}).get("bc_anchor")
-    if anchor:
-        anchor_date = parse_date_arg(anchor["date"])
-        anchor_global_day = None
-        for row, global_start, global_end in bc_rows:
-            if str(row.get("Unit")) == str(anchor.get("unit")) and str(row.get("天数")) == str(anchor.get("day")):
-                anchor_global_day = global_start
-                break
-        if anchor_global_day is None:
-            raise SystemExit(f"BC anchor not found: {anchor}")
-        global_day_number = anchor_global_day + (current_date - anchor_date).days
-    else:
-        day1 = parse_date_arg(config["planner"]["bc_day_1_date"])
-        global_day_number = (current_date - day1).days + 1
-    if global_day_number < 1:
+    step = step_for_date(config, "AP_Calculus_BC", current_date)
+    if not step:
         return []
-    tasks = []
-    for row, global_start, global_end in bc_rows:
-        if not (global_start <= global_day_number <= global_end):
-            continue
-        task_key = f"BC:{row.get('Unit')}:{row.get('天数')}:RESOURCE"
-        default_min = config["planner"]["default_targets_min"]["BC_RESOURCE_WORK"]
-        target_min = adaptive_minutes(state, task_key, default_min, config)
-        primary = find_existing_path(config, row.get("文件名（可直接打开）"))
-        resources = []
-        if primary:
-            resources.append({"label": "primary_resource", "target": primary})
-        for label, col in [("reference", "课件/课本参考"), ("practice", "配套练习/答案")]:
-            target = find_existing_path(config, row.get(col))
-            if target:
-                resources.append({"label": label, "target": target})
-        resources.extend(resource_index_resources(
-            config,
-            "AP_Calculus_BC",
-            row.get("Unit"),
-            row.get("学习内容"),
-            "BC_RESOURCE_WORK",
-        ))
-        resources.extend(courseware_excerpt_resources(
-            config,
-            "AP_Calculus_BC",
-            row.get("Unit"),
-            row.get("学习内容"),
-            resources,
-            row,
-        ))
-        resources.extend(stewart_excerpt_resources(config, row))
-        resources = dedupe_resources(resources)
-        launch_resource = next(
-            (r.get("target") for r in resources if r.get("label") == "task_excerpt_courseware"),
-            None
-        ) or primary or next(
-            (r.get("target") for r in resources if str(r.get("label", "")).startswith("resource_index_")),
-            None
-        )
-        tasks.append({
-            "id": f"BC-{current_date.isoformat()}-DAY{global_day_number}-{slug(row.get('Unit'))}",
-            "task_key": task_key,
-            "course": "AP_Calculus_BC",
-            "kind": "BC_RESOURCE_WORK",
-            "state": "Planned",
-            "date": current_date.isoformat(),
-            "unit": row.get("Unit"),
-            "title": f"BC {row.get('Unit')} {row.get('天数')} - {row.get('学习内容')}",
-            "target_min": target_min,
-            "observable_goal": (
-                f"Open BC resource for {row.get('学习内容')} and work for at least {target_min} minutes."
-            ),
-            "completion_criteria": [
-                f"BC resource/Khan/GoodNotes window evidence for about {target_min} minutes",
-                "Start/end screenshots exist",
-                "uone reviews evidence and overwrites final status"
-            ],
-            "resources": resources,
-            "launch": [
-                {"type": "url", "target": config["urls"].get("khan_calculus_bc_units", {}).get(str(row.get("Unit")), config["urls"]["khan_calculus_bc"])},
-                {"type": "app", "target": config["apps"]["notes"]},
-                {"type": "resource", "target": launch_resource} if launch_resource else {"type": "app", "target": config["apps"]["pdf"]}
-            ],
-            "source": {
-                "workbook": str(plan),
-                "sheet": "每日计划",
-                "row": row,
-                "mapped_global_day_number": global_day_number,
-                "mapped_global_day_range": [global_start, global_end]
-            },
-        })
-    return tasks
+    row = step["row"]
+    runner = step["runner"]
+    kind = task_kind_for_runner("AP_Calculus_BC", runner)
+    task_key = f"BC:{step['phase']}:{row.get('天数')}:{runner}"
+    default_min = default_minutes_for_kind(config, kind)
+    target_min = adaptive_minutes(state, task_key, default_min, config)
+    primary = find_existing_path(config, row.get("文件名（可直接打开）"))
+    resources = []
+    if primary:
+        resources.append({"label": "primary_resource", "target": primary})
+    for label, col in [("reference", "课件/课本参考"), ("practice", "配套练习/答案")]:
+        target = find_existing_path(config, row.get(col))
+        if target:
+            resources.append({"label": label, "target": target})
+    resources.extend(resource_index_resources(
+        config,
+        "AP_Calculus_BC",
+        row.get("Unit"),
+        row.get("学习内容"),
+        kind,
+    ))
+    resources.extend(courseware_excerpt_resources(
+        config,
+        "AP_Calculus_BC",
+        row.get("Unit"),
+        row.get("学习内容"),
+        resources,
+        row,
+    ))
+    resources.extend(stewart_excerpt_resources(config, row))
+    resources = dedupe_resources(resources)
+    launch_resource = next(
+        (r.get("target") for r in resources if r.get("label") == "task_excerpt_courseware"),
+        None
+    ) or primary or next(
+        (r.get("target") for r in resources if str(r.get("label", "")).startswith("resource_index_")),
+        None
+    )
+    global_day_number = step.get("mapped_global_day_number") or step["global_day_range"][0]
+    return [{
+        "id": f"BC-{current_date.isoformat()}-DAY{global_day_number}-{slug(row.get('Unit'))}",
+        "task_key": task_key,
+        "course": "AP_Calculus_BC",
+        "kind": kind,
+        "runner": runner,
+        "phase": step["phase"],
+        "state": "Planned",
+        "date": current_date.isoformat(),
+        "unit": row.get("Unit"),
+        "title": f"BC {row.get('Unit')} {row.get('天数')} - {row.get('学习内容')}",
+        "target_min": target_min,
+        "observable_goal": (
+            f"Open BC resource for {row.get('学习内容')} and work for at least {target_min} minutes."
+        ),
+        "completion_criteria": [
+            f"BC resource/Khan/GoodNotes window evidence for about {target_min} minutes",
+            "Start/end screenshots exist",
+            "uone reviews evidence and overwrites final status"
+        ],
+        "resources": resources,
+        "launch": [
+            {"type": "url", "target": config["urls"].get("khan_calculus_bc_units", {}).get(str(row.get("Unit")), config["urls"]["khan_calculus_bc"])},
+            {"type": "app", "target": config["apps"]["notes"]},
+            {"type": "resource", "target": launch_resource} if launch_resource else {"type": "app", "target": config["apps"]["pdf"]}
+        ],
+        "source": {
+            "workbook": str(plan),
+            "sheet": "每日计划",
+            "row": row,
+            "plan_step": step,
+            "mapped_global_day_number": global_day_number,
+            "mapped_global_day_range": step["global_day_range"]
+        },
+    }]
 
 
 def add_error_log_task(config, state, current_date):
@@ -1849,6 +1840,11 @@ def reset_task(args):
 
 def progression_runner(course, row):
     title = str(row.get("学习内容") or "")
+    unit = str(row.get("Unit") or "")
+    if "FRQ" in title or "FRQ" in unit:
+        return "frq_runner"
+    if "模考" in title or "模考" in unit or "Mock" in title:
+        return "mock_exam_runner"
     if course == "AP_CSA":
         practice_ids = str(row.get("今日刷题编号") or "")
         if "Q" in practice_ids and "—" not in practice_ids:
@@ -1958,7 +1954,53 @@ def step_for_date(config, course, current_date):
         global_day = anchor_global_day + (current_date - parse_date_arg(anchor["date"])).days
     else:
         global_day = (current_date - parse_date_arg(config["planner"]["bc_day_1_date"])).days + 1
-    return next((step for step in steps if step["global_day_range"][0] <= global_day <= step["global_day_range"][1]), None)
+    step = next((step for step in steps if step["global_day_range"][0] <= global_day <= step["global_day_range"][1]), None)
+    if step:
+        step = {**step, "mapped_global_day_number": global_day}
+    return step
+
+
+def phase_pool(config, course):
+    steps = canonical_csa_steps(config) if course == "AP_CSA" else canonical_bc_steps(config)
+    pools = {}
+    for step in steps:
+        phase = step["phase"]
+        pool = pools.setdefault(phase, {
+            "course": course,
+            "phase": phase,
+            "phase_name": step.get("phase_name"),
+            "unit": step.get("unit"),
+            "runners": {},
+            "steps": [],
+            "resources": [],
+        })
+        pool["runners"][step["runner"]] = pool["runners"].get(step["runner"], 0) + step["duration_days"]
+        pool["steps"].append({
+            "day_label": step.get("day_label"),
+            "global_day_range": step.get("global_day_range"),
+            "plan_date": step.get("plan_date"),
+            "actual_date": step.get("actual_date"),
+            "title": step.get("title"),
+            "runner": step.get("runner"),
+            "duration_days": step.get("duration_days"),
+        })
+    for pool in pools.values():
+        unit = pool.get("unit")
+        for entry in resource_index_entries(config, course):
+            if not unit_matches(entry["unit"], unit):
+                continue
+            category = entry["category"]
+            target = resolve_index_resource(config, entry)
+            canvas_url = canvas_assignment_url(config, entry) if not target else None
+            pool["resources"].append({
+                "label": f"resource_index_{RESOURCE_LABELS.get(category, slug(category))}",
+                "target": target or canvas_url or "",
+                "missing": not bool(target or canvas_url),
+                "category": category,
+                "source": "canvas_assignment_links" if canvas_url else "workbook_resource_index",
+                "index_filename": entry.get("filename"),
+            })
+    return list(pools.values())
 
 
 def plan_progression(args):
@@ -1983,6 +2025,22 @@ def plan_progression(args):
     print(f"date: {current_date.isoformat()}")
     for step in selected:
         print(f"{step['course']}\t{step['runner']}\t{step['phase']}\t{step['day_label']}\t{step['title']}")
+
+
+def plan_phases(args):
+    config = load_config()
+    courses = [args.course] if args.course else ["AP_Calculus_BC", "AP_CSA"]
+    pools = []
+    for course in courses:
+        pools.extend(phase_pool(config, course))
+    if args.format == "json":
+        print(json.dumps({"phases": pools}, ensure_ascii=False, indent=2))
+        return
+    for pool in pools:
+        print(f"{pool['course']}\t{pool['phase']}\tsteps={len(pool['steps'])}\trunners={pool['runners']}")
+        for resource in pool["resources"]:
+            status = "MISSING" if resource.get("missing") else "OK"
+            print(f"  - {resource.get('label')}: {status} {resource.get('target')}")
 
 
 def cmd_today(args):
@@ -2038,6 +2096,10 @@ def main():
     p_progression.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
     p_progression.add_argument("--format", choices=["text", "json"], default="text")
     p_progression.set_defaults(func=plan_progression)
+    p_phases = sub.add_parser("plan-phases", help="show phase pools with runner mix and resource-index materials")
+    p_phases.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
+    p_phases.add_argument("--format", choices=["text", "json"], default="text")
+    p_phases.set_defaults(func=plan_phases)
     p_reset = sub.add_parser("reset-task", help="reset a task to Planned after accidental/test start")
     p_reset.add_argument("--task", required=True)
     p_reset.set_defaults(func=reset_task)
