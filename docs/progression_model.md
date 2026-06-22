@@ -220,3 +220,49 @@ build_*_tasks(date)
 ```
 
 This means the date allocator no longer scans files first. It selects the plan step first, then the runner and material resolver act on that selected row.
+
+## Incomplete Task Delay Rule
+
+When uone reviews a course task as anything other than `completed`, the OS records a schedule delay event:
+
+```text
+task_date + 1 day -> course schedule delay +1 day
+```
+
+The event is stored in local state:
+
+```text
+data/state.json -> schedule_delay_events
+```
+
+The Excel plans are not modified. Instead, the planner subtracts active delay days at runtime.
+
+BC formula with delay:
+
+```text
+current_global_day = anchor_global_day + days_since_anchor - active_delay_days
+```
+
+CSA formula with delay:
+
+```text
+effective_lookup_date = current_date - active_delay_days
+selected_step = row where actual_date == effective_lookup_date
+```
+
+Example:
+
+```text
+2026-06-22 BC Unit 2 Day 5-6 not completed
+delay event effective from 2026-06-23
+2026-06-24 still maps to Unit 2 Day 5-6 instead of advancing to Day 7-8
+```
+
+Check active delay events:
+
+```bash
+python3 learning_os.py plan-delays
+python3 learning_os.py plan-delays --course AP_Calculus_BC --format json
+```
+
+Delay is per course. A BC incomplete task shifts BC only; a CSA incomplete task shifts CSA only.

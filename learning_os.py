@@ -54,8 +54,13 @@ def load_config():
 
 def load_state():
     if not STATE_PATH.exists():
-        return {"tasks": {}, "sessions": {}, "adaptive_time": {}}
-    return read_json(STATE_PATH)
+        return {"tasks": {}, "sessions": {}, "adaptive_time": {}, "schedule_delay_events": []}
+    state = read_json(STATE_PATH)
+    state.setdefault("tasks", {})
+    state.setdefault("sessions", {})
+    state.setdefault("adaptive_time", {})
+    state.setdefault("schedule_delay_events", [])
+    return state
 
 
 def save_state(state):
@@ -109,6 +114,42 @@ def parse_day_range(raw):
 
 def adaptive_minutes(state, task_key, default_min, config):
     return int(state.get("adaptive_time", {}).get(task_key, default_min))
+
+
+def schedule_delay_days(state, course, current_date):
+    if not state:
+        return 0
+    total = 0
+    for event in state.get("schedule_delay_events", []):
+        if event.get("course") != course:
+            continue
+        effective = event.get("effective_date")
+        if effective and parse_date_arg(effective) <= current_date:
+            total += int(event.get("days", 1))
+    return total
+
+
+def apply_schedule_delay_for_review(state, task, session_id, final_state):
+    events = state.setdefault("schedule_delay_events", [])
+    events[:] = [event for event in events if event.get("session_id") != session_id]
+    course = task.get("course")
+    if course not in {"AP_CSA", "AP_Calculus_BC"}:
+        return None
+    if final_state == "Completed":
+        return None
+    task_date = parse_date_arg(task["date"])
+    event = {
+        "session_id": session_id,
+        "task_id": task["id"],
+        "course": course,
+        "task_date": task["date"],
+        "effective_date": (task_date + dt.timedelta(days=1)).isoformat(),
+        "days": 1,
+        "reason": final_state,
+        "created_at": dt.datetime.now().isoformat(timespec="seconds"),
+    }
+    events.append(event)
+    return event
 
 
 def find_existing_path(config, candidate):
@@ -1134,7 +1175,7 @@ def khan_bc_url_for_step(config, row):
 
 def build_csa_tasks(config, state, current_date):
     plan = Path(config["plans"]["AP_CSA"])
-    step = step_for_date(config, "AP_CSA", current_date)
+    step = step_for_date(config, "AP_CSA", current_date, state)
     if not step:
         return []
     row = step["row"]
@@ -1200,7 +1241,7 @@ def build_csa_tasks(config, state, current_date):
 
 def build_bc_tasks(config, state, current_date):
     plan = Path(config["plans"]["AP_Calculus_BC"])
-    step = step_for_date(config, "AP_Calculus_BC", current_date)
+    step = step_for_date(config, "AP_Calculus_BC", current_date, state)
     if not step:
         return []
     row = step["row"]
@@ -1647,9 +1688,15 @@ def apply_review(session_id, status, notes="", adjust_min=None, review_source="m
         bump = int(adjust_min if adjust_min is not None else config["completion_policy"]["time_escalation_min"])
         cap = int(config["completion_policy"]["max_target_min"])
         adaptive[key] = min(cap, current_min + bump)
+    delay_event = apply_schedule_delay_for_review(state, task, session_id, final_state)
     state["sessions"][session_id] = session
     save_state(state)
-    result = {"task_id": task_id, "final_state": final_state, "next_target_min": state.get("adaptive_time", {}).get(key)}
+    result = {
+        "task_id": task_id,
+        "final_state": final_state,
+        "next_target_min": state.get("adaptive_time", {}).get(key),
+        "schedule_delay_event": delay_event,
+    }
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return result
 
@@ -1946,11 +1993,13 @@ def canonical_csa_steps(config):
     return steps
 
 
-def step_for_date(config, course, current_date):
+def step_for_date(config, course, current_date, state=None):
+    delay_days = schedule_delay_days(state, course, current_date)
     if course == "AP_CSA":
+        adjusted_date = current_date - dt.timedelta(days=delay_days)
         for step in canonical_csa_steps(config):
-            if step.get("actual_date") == current_date.isoformat():
-                return step
+            if step.get("actual_date") == adjusted_date.isoformat():
+                return {**step, "schedule_delay_days": delay_days, "effective_plan_date": adjusted_date.isoformat()}
         return None
     steps = canonical_bc_steps(config)
     anchor = config.get("planner", {}).get("bc_anchor")
@@ -1962,12 +2011,12 @@ def step_for_date(config, course, current_date):
         if not anchor_step:
             return None
         anchor_global_day = anchor_step["global_day_range"][0]
-        global_day = anchor_global_day + (current_date - parse_date_arg(anchor["date"])).days
+        global_day = anchor_global_day + (current_date - parse_date_arg(anchor["date"])).days - delay_days
     else:
-        global_day = (current_date - parse_date_arg(config["planner"]["bc_day_1_date"])).days + 1
+        global_day = (current_date - parse_date_arg(config["planner"]["bc_day_1_date"])).days + 1 - delay_days
     step = next((step for step in steps if step["global_day_range"][0] <= global_day <= step["global_day_range"][1]), None)
     if step:
-        step = {**step, "mapped_global_day_number": global_day}
+        step = {**step, "mapped_global_day_number": global_day, "schedule_delay_days": delay_days}
     return step
 
 
@@ -2016,11 +2065,12 @@ def phase_pool(config, course):
 
 def plan_progression(args):
     config = load_config()
+    state = load_state()
     current_date = parse_date_arg(args.date) if args.date else today_date()
     courses = [args.course] if args.course else ["AP_Calculus_BC", "AP_CSA"]
     selected = []
     for course in courses:
-        step = step_for_date(config, course, current_date)
+        step = step_for_date(config, course, current_date, state)
         if step:
             selected.append(step)
     if args.format == "json":
@@ -2035,7 +2085,8 @@ def plan_progression(args):
         return
     print(f"date: {current_date.isoformat()}")
     for step in selected:
-        print(f"{step['course']}\t{step['runner']}\t{step['phase']}\t{step['day_label']}\t{step['title']}")
+        delay = f"\tdelay={step.get('schedule_delay_days', 0)}d" if step.get("schedule_delay_days") else ""
+        print(f"{step['course']}\t{step['runner']}\t{step['phase']}\t{step['day_label']}\t{step['title']}{delay}")
 
 
 def plan_phases(args):
@@ -2052,6 +2103,24 @@ def plan_phases(args):
         for resource in pool["resources"]:
             status = "MISSING" if resource.get("missing") else "OK"
             print(f"  - {resource.get('label')}: {status} {resource.get('target')}")
+
+
+def plan_delays(args):
+    state = load_state()
+    events = state.get("schedule_delay_events", [])
+    if args.course:
+        events = [event for event in events if event.get("course") == args.course]
+    if args.format == "json":
+        print(json.dumps({"schedule_delay_events": events}, ensure_ascii=False, indent=2))
+        return
+    if not events:
+        print("No schedule delay events.")
+        return
+    for event in events:
+        print(
+            f"{event.get('course')}\t+{event.get('days', 1)}d from {event.get('effective_date')}"
+            f"\t{event.get('task_id')}\t{event.get('reason')}"
+        )
 
 
 def cmd_today(args):
@@ -2111,6 +2180,10 @@ def main():
     p_phases.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
     p_phases.add_argument("--format", choices=["text", "json"], default="text")
     p_phases.set_defaults(func=plan_phases)
+    p_delays = sub.add_parser("plan-delays", help="show active schedule delay events from incomplete reviews")
+    p_delays.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
+    p_delays.add_argument("--format", choices=["text", "json"], default="text")
+    p_delays.set_defaults(func=plan_delays)
     p_reset = sub.add_parser("reset-task", help="reset a task to Planned after accidental/test start")
     p_reset.add_argument("--task", required=True)
     p_reset.set_defaults(func=reset_task)
