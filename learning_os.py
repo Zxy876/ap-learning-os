@@ -1414,23 +1414,34 @@ def launch_item(item):
 
 
 def launch_task_resources(task):
-    open_label_order = [
-        "resource_index_courseware",
-        "supplemental_courseware",
-        "resource_index_syllabus",
-        "resource_index_textbook",
-        "resource_index_practice_canvas",
-        "resource_index_practice",
-        "resource_index_test_canvas",
-        "resource_index_test",
-        "resource_index_frq",
-        "resource_index_mock_exam",
-        "resource_index_checklist",
-        "resource_index_vocabulary",
-        "resource_index_formula_sheet",
-        "question_file",
-        "task_excerpt_courseware",
-    ]
+    if task.get("course") == "AP_Calculus_BC":
+        open_label_order = [
+            "resource_index_practice_canvas",
+            "resource_index_practice",
+            "resource_index_test_canvas",
+            "resource_index_test",
+            "resource_index_frq",
+            "resource_index_mock_exam",
+            "task_excerpt_courseware",
+        ]
+    else:
+        open_label_order = [
+            "resource_index_courseware",
+            "supplemental_courseware",
+            "resource_index_syllabus",
+            "resource_index_textbook",
+            "resource_index_practice_canvas",
+            "resource_index_practice",
+            "resource_index_test_canvas",
+            "resource_index_test",
+            "resource_index_frq",
+            "resource_index_mock_exam",
+            "resource_index_checklist",
+            "resource_index_vocabulary",
+            "resource_index_formula_sheet",
+            "question_file",
+            "task_excerpt_courseware",
+        ]
     resources_by_label = {}
     for resource in task.get("resources", []):
         resources_by_label.setdefault(resource.get("label"), []).append(resource)
