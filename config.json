@@ -11,8 +11,8 @@
     "bc_anchor": {
       "date": "2026-06-22",
       "unit": "Unit 2",
-      "day": "Day 1-2",
-      "reason": "Learning starts on 2026-06-22. Khan AP Calculus BC screenshot shows Unit 1 mostly progressed and Unit 2 in progress; start daily workflow at Unit 2."
+      "day": "Day 5-6",
+      "reason": "Learning starts on 2026-06-22. Khan screenshots show Unit 1 mastery 60%, Unit 2 mastery 50%, and active skill Differentiate quotients, so start at Unit 2 Day 5-6: basic derivative rules including product and quotient rules."
     },
     "csa_year": 2026,
     "csa_plan_start_date": "2026-06-21",
@@ -69,6 +69,9 @@
       "Unit 8": "https://www.khanacademy.org/math/ap-calculus-bc/bc-applications-of-integration-new",
       "Unit 9": "https://www.khanacademy.org/math/ap-calculus-bc/bc-parametric-polar-vector-new",
       "Unit 10": "https://www.khanacademy.org/math/ap-calculus-bc/bc-series-new"
+    },
+    "khan_calculus_bc_topics": {
+      "Unit 2|Day 5-6": "https://www.khanacademy.org/math/ap-calculus-bc/bc-differentiation-1-new/bc-2-9/e/differentiate-quotients"
     }
   },
   "local_resource_fallbacks": {

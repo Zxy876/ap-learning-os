@@ -513,6 +513,8 @@ def bc_semantic_courseware_page_range(unit, title):
         (["导数作为函数", "可微性"], [13, 25], "2.2-2.4 derivative as function and differentiability"),
         (["基本求导", "幂", "积", "商"], [26, 41], "2.5-2.9 basic derivative rules"),
         (["三角函数"], [34, 44], "2.7 and 2.10 trigonometric derivatives"),
+        (["高阶导数"], [35, 47], "2.8-2.10 and 3.6 higher-order derivative practice"),
+        (["错题复盘"], [26, 47], "Unit 2 rule-review range for error log recovery"),
     ]
     for triggers, page_range, reason in mappings:
         if any(trigger in title_text for trigger in triggers):
@@ -1122,6 +1124,14 @@ def default_minutes_for_kind(config, kind):
     return config["planner"]["default_targets_min"].get(kind, config["planner"]["default_targets_min"].get("BC_RESOURCE_WORK", 45))
 
 
+def khan_bc_url_for_step(config, row):
+    key = f"{row.get('Unit')}|{row.get('天数')}"
+    topic_url = config["urls"].get("khan_calculus_bc_topics", {}).get(key)
+    if topic_url:
+        return topic_url
+    return config["urls"].get("khan_calculus_bc_units", {}).get(str(row.get("Unit")), config["urls"]["khan_calculus_bc"])
+
+
 def build_csa_tasks(config, state, current_date):
     plan = Path(config["plans"]["AP_CSA"])
     step = step_for_date(config, "AP_CSA", current_date)
@@ -1254,7 +1264,7 @@ def build_bc_tasks(config, state, current_date):
         ],
         "resources": resources,
         "launch": [
-            {"type": "url", "target": config["urls"].get("khan_calculus_bc_units", {}).get(str(row.get("Unit")), config["urls"]["khan_calculus_bc"])},
+            {"type": "url", "target": khan_bc_url_for_step(config, row)},
             {"type": "app", "target": config["apps"]["notes"]},
             {"type": "resource", "target": launch_resource} if launch_resource else {"type": "app", "target": config["apps"]["pdf"]}
         ],
@@ -1302,9 +1312,10 @@ def generate_today(config, state, current_date):
     if tasks:
         tasks.append(add_error_log_task(config, state, current_date))
     generated_ids = {task["id"] for task in tasks}
+    generated_courses = {task.get("course") for task in tasks}
     for task_id, existing in list(state["tasks"].items()):
         if existing.get("date") == current_date.isoformat() and task_id not in generated_ids:
-            if existing.get("state") in {"Planned", "Needs Review", "Failed", "Partially Completed"}:
+            if existing.get("course") in generated_courses and existing.get("state") != "Completed":
                 del state["tasks"][task_id]
     for task in tasks:
         existing = state["tasks"].get(task["id"], {})

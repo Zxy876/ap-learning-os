@@ -41,16 +41,24 @@ global_start = previous_global_end + 1
 global_end = global_start + duration_days - 1
 ```
 
-Current BC start is not Unit 1 Day 1. It is anchored from actual progress:
+Current BC start is not Unit 1 Day 1. It is anchored from actual Khan progress:
 
 ```text
-2026-06-22 -> BC Unit 2 Day 1-2
+2026-06-22 -> BC Unit 2 Day 5-6
+```
+
+Evidence from 2026-06-22 screenshots:
+
+```text
+Khan Unit 1 mastery: 60%
+Khan Unit 2 mastery: 50%
+Active Khan skill: Differentiate quotients
 ```
 
 Runtime formula:
 
 ```text
-anchor_global_day = global_start(Unit 2, Day 1-2)
+anchor_global_day = global_start(Unit 2, Day 5-6)
 current_global_day = anchor_global_day + days_between(current_date, 2026-06-22)
 selected_step = first step where global_start <= current_global_day <= global_end
 ```
@@ -58,10 +66,10 @@ selected_step = first step where global_start <= current_global_day <= global_en
 Example:
 
 ```text
-2026-06-22 -> Unit 2 Day 1-2 -> concept_runner
-2026-06-23 -> Unit 2 Day 1-2 -> concept_runner
-2026-06-24 -> Unit 2 Day 3-4 -> concept_runner
-2026-06-26 -> Unit 2 Day 5-6 -> concept_runner
+2026-06-22 -> Unit 2 Day 5-6 -> concept_runner
+2026-06-23 -> Unit 2 Day 5-6 -> concept_runner
+2026-06-24 -> Unit 2 Day 7-8 -> concept_runner
+2026-06-26 -> Unit 2 Day 9-10 -> concept_runner
 ```
 
 ## CSA Progression Rule

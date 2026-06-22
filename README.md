@@ -251,11 +251,17 @@ python3 learning_os.py materials --date 2026-06-22 --core-only
 
 ## BC Current Progress Anchor
 
-BC no longer assumes `2026-06-22` is Unit 1 Day 1. Based on the Khan screenshot, the current anchor is:
+BC no longer assumes `2026-06-22` is Unit 1 Day 1. Based on the Khan screenshots, the current anchor is:
 
 ```text
-2026-06-22 -> BC Unit 2 Day 1-2
+2026-06-22 -> BC Unit 2 Day 5-6
 ```
+
+Observed start:
+
+- Unit 1 mastery: 60%
+- Unit 2 mastery: 50%
+- Active skill: Differentiate quotients
 
 This is configured in `config.json`:
 
@@ -263,7 +269,7 @@ This is configured in `config.json`:
 "bc_anchor": {
   "date": "2026-06-22",
   "unit": "Unit 2",
-  "day": "Day 1-2"
+  "day": "Day 5-6"
 }
 ```
 
