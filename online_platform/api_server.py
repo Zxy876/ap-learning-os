@@ -8,8 +8,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from import_compile_snapshot import connect, dumps, stable_id
+from import_compile_snapshot import connect, dumps, import_snapshot, stable_id, summary
 from process_writebacks import process_writebacks
+from publish_materials import publish_materials
+from storage_adapters import LocalStorageAdapter, S3CompatibleStorageAdapter
 
 
 BASE = Path(__file__).resolve().parents[1]
@@ -339,7 +341,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
         self.wfile.write(body)
@@ -521,6 +523,37 @@ class ApiHandler(BaseHTTPRequestHandler):
                     return
                 review_request_id = path.split("/")[-2]
                 self.send_json(201, decide_review(self.conn, review_request_id, payload))
+                return
+            if path == "/api/author/compiles/import":
+                if not self.require_role("author"):
+                    return
+                snapshot = payload.get("snapshot")
+                if isinstance(snapshot, str):
+                    snapshot = json.loads(snapshot)
+                if not isinstance(snapshot, dict):
+                    raise ValueError("snapshot must be a compile snapshot object or JSON string")
+                if snapshot.get("schema_version") != "aplos.compile_snapshot.v1":
+                    raise ValueError(f"unsupported schema_version: {snapshot.get('schema_version')}")
+                plan_compile_id = import_snapshot(
+                    self.conn,
+                    snapshot,
+                    payload.get("organization_id") or "org_hosted_ap_learning_os",
+                    payload.get("organization_name") or "Hosted AP Learning OS",
+                )
+                self.send_json(201, summary(self.conn, plan_compile_id))
+                return
+            if path == "/api/author/materials/publish":
+                if not self.require_role("author"):
+                    return
+                backend = (payload.get("backend") if payload else None) or os.getenv("APLOS_STORAGE_BACKEND", "local")
+                if backend == "s3":
+                    adapter = S3CompatibleStorageAdapter.from_env()
+                elif backend == "local":
+                    public_base_url = (payload.get("base_url") if payload else None) or os.getenv("APLOS_PUBLIC_BASE_URL", "")
+                    adapter = LocalStorageAdapter(self.server.storage_root, public_base_url)
+                else:
+                    raise ValueError("backend must be local or s3")
+                self.send_json(200, publish_materials(self.conn, adapter))
                 return
             if path == "/api/writebacks/run":
                 if not self.require_role("author"):

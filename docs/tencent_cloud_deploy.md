@@ -96,8 +96,8 @@ http://SERVER_PUBLIC_IP:8776/review
 
 ## Import A Compile Snapshot
 
-For now, compile snapshots are generated locally from the plan/resource files,
-then copied to the server.
+Compile snapshots are generated locally from the plan/resource files, then
+imported into the hosted app.
 
 On Mac:
 
@@ -106,7 +106,16 @@ python3 learning_os.py compile-export --start 2026-06-22 --days 30 \
   --output data/exports/tencent_compile_2026-06-22_30d.json
 ```
 
-Copy to server:
+Preferred browser path:
+
+1. Open `http://SERVER_PUBLIC_IP:8776/author`.
+2. Enter the author role token if production tokens are enabled.
+3. Select or paste the compile snapshot JSON.
+4. Click `Import Snapshot`.
+5. Click `Publish Local Materials` if source files exist on the server, or
+   `Publish S3/COS` if object storage variables are configured.
+
+CLI fallback:
 
 ```bash
 scp data/exports/tencent_compile_2026-06-22_30d.json USER@SERVER:/home/USER/ap-learning-os/data/exports/
@@ -132,6 +141,13 @@ docker compose -f docker-compose.tencent.yml exec ap-learning-os \
 
 If materials are not copied to the server, author/workspace pages still show
 tasks, but file URLs for local PDF material cannot be published.
+
+## Role Tokens In The Browser
+
+If `APLOS_AUTHOR_TOKEN`, `APLOS_EXECUTOR_TOKEN`, or `APLOS_REVIEWER_TOKEN` are
+set, each role page requires its token. Paste the matching token into the role
+token field at the top of the page and click `Save Token`. The token is stored
+in that browser's local storage.
 
 ## Tencent COS / Object Storage
 
@@ -162,4 +178,3 @@ docker compose -f docker-compose.tencent.yml exec ap-learning-os \
 - Postgres schema exists, but the API has not been moved to Postgres.
 - Role tokens are a simple server-side guard, not a full login system.
 - HTTPS should be added before sharing widely.
-

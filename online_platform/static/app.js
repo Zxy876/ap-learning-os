@@ -13,8 +13,11 @@ function setActive(route) {
 }
 
 async function api(path, options = {}) {
+  const token = localStorage.getItem(`aplos_token_${routeName()}`) || localStorage.getItem("aplos_token") || "";
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
   const data = await response.json();
@@ -52,6 +55,30 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function tokenControls(route) {
+  const input = el("input", {
+    type: "password",
+    placeholder: `${route} token`,
+    value: localStorage.getItem(`aplos_token_${route}`) || "",
+  });
+  const save = el("button", { text: "Save Token" });
+  save.addEventListener("click", () => {
+    localStorage.setItem(`aplos_token_${route}`, input.value.trim());
+    save.textContent = "Saved";
+    setTimeout(() => { save.textContent = "Save Token"; }, 1200);
+  });
+  const clear = el("button", { text: "Clear" });
+  clear.addEventListener("click", () => {
+    localStorage.removeItem(`aplos_token_${route}`);
+    input.value = "";
+  });
+  return el("div", { class: "tokenbar" }, [
+    el("label", { text: "Role token" }, [input]),
+    save,
+    clear,
+  ]);
+}
+
 async function renderWorkspace() {
   setActive("workspace");
   subtitle.textContent = "Executor workspace";
@@ -71,6 +98,7 @@ async function renderWorkspace() {
   const button = el("button", { class: "primary", text: "Load" });
   button.addEventListener("click", () => load().catch(renderError));
   app.replaceChildren(
+    tokenControls("workspace"),
     el("div", { class: "toolbar" }, [el("label", { text: "Date" }, [dateInput]), button]),
     el("div", { class: "grid" }, [list, detail]),
   );
@@ -151,7 +179,7 @@ async function renderReview() {
     }
     data.review_requests.forEach((request) => list.append(reviewCard(request, detail, load)));
   };
-  app.replaceChildren(el("div", { class: "grid" }, [list, detail]));
+  app.replaceChildren(tokenControls("review"), el("div", { class: "grid" }, [list, detail]));
   await load();
 }
 
@@ -202,6 +230,60 @@ function renderReviewDetail(request, task, detail, reload) {
 async function renderAuthor() {
   setActive("author");
   subtitle.textContent = "Author sandbox summary";
+  const snapshotText = el("textarea", { placeholder: "Paste compile snapshot JSON here." });
+  const snapshotFile = el("input", { type: "file", accept: "application/json,.json" });
+  snapshotFile.addEventListener("change", async () => {
+    const file = snapshotFile.files && snapshotFile.files[0];
+    if (!file) return;
+    snapshotText.value = await file.text();
+  });
+  const orgId = el("input", { type: "text", value: "org_hosted_ap_learning_os" });
+  const orgName = el("input", { type: "text", value: "Hosted AP Learning OS" });
+  const importResult = el("pre", { class: "result", text: "" });
+  const importButton = el("button", { class: "primary", text: "Import Snapshot" });
+  importButton.addEventListener("click", async () => {
+    const imported = await api("/api/author/compiles/import", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: orgId.value,
+        organization_name: orgName.value,
+        snapshot: JSON.parse(snapshotText.value),
+      }),
+    });
+    importResult.textContent = `${JSON.stringify(imported, null, 2)}\n\nReload the page to refresh compile summaries.`;
+  });
+  const publishResult = el("pre", { class: "result", text: "" });
+  const publishLocal = el("button", { text: "Publish Local Materials" });
+  publishLocal.addEventListener("click", async () => {
+    const result = await api("/api/author/materials/publish", {
+      method: "POST",
+      body: JSON.stringify({ backend: "local", base_url: window.location.origin }),
+    });
+    publishResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh material counts.`;
+  });
+  const publishS3 = el("button", { text: "Publish S3/COS" });
+  publishS3.addEventListener("click", async () => {
+    const result = await api("/api/author/materials/publish", {
+      method: "POST",
+      body: JSON.stringify({ backend: "s3" }),
+    });
+    publishResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh material counts.`;
+  });
+  const tools = el("section", { class: "record" }, [
+    el("h2", { text: "Import Compile Snapshot" }),
+    el("div", { class: "toolbar" }, [
+      el("label", { text: "Organization ID" }, [orgId]),
+      el("label", { text: "Organization Name" }, [orgName]),
+      el("label", { text: "Snapshot File" }, [snapshotFile]),
+    ]),
+    snapshotText,
+    el("div", { class: "actions" }, [importButton]),
+    importResult,
+    el("h2", { text: "Publish Materials" }),
+    el("p", { text: "Local publish requires source files to exist on the server. S3/COS publish requires storage environment variables." }),
+    el("div", { class: "actions" }, [publishLocal, publishS3]),
+    publishResult,
+  ]);
   const data = await api("/api/author/compiles");
   const list = el("section", { class: "list" });
   if (!data.compiles.length) {
@@ -220,7 +302,7 @@ async function renderAuthor() {
       el("p", { text: `Start ${compile.start_date}, ${compile.days} days, courses ${compile.courses.join(", ")}` }),
     ]));
   });
-  app.replaceChildren(list);
+  app.replaceChildren(tokenControls("author"), tools, list);
 }
 
 async function boot() {

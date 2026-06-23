@@ -22,6 +22,7 @@ def publish_materials(conn, adapter):
         "already_published": 0,
         "external_urls": 0,
         "missing_local_files": [],
+        "non_file_targets": [],
     }
     for row in rows:
         result["checked"] += 1
@@ -38,6 +39,9 @@ def publish_materials(conn, adapter):
         local_target = row["local_target"]
         if not local_target or not Path(local_target).exists():
             result["missing_local_files"].append({"material_id": row["id"], "local_target": local_target})
+            continue
+        if not Path(local_target).is_file():
+            result["non_file_targets"].append({"material_id": row["id"], "local_target": local_target})
             continue
         published = adapter.publish(local_target)
         conn.execute(
