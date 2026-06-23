@@ -1,0 +1,13 @@
+services:
+  ap-learning-os:
+    build: .
+    container_name: ap-learning-os
+    restart: unless-stopped
+    env_file:
+      - path: .env.production
+        required: false
+    ports:
+      - "8776:8776"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads

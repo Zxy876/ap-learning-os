@@ -552,10 +552,10 @@ class ApiServer(ThreadingHTTPServer):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the local AP Learning OS online-platform API skeleton.")
-    parser.add_argument("--db", default=str(BASE / "data" / "online_platform" / "aplos_dev.sqlite3"))
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8776)
-    parser.add_argument("--storage-root", default=str(DEFAULT_STORAGE_ROOT))
+    parser.add_argument("--db", default=os.getenv("APLOS_DB_PATH", str(BASE / "data" / "online_platform" / "aplos_dev.sqlite3")))
+    parser.add_argument("--host", default=os.getenv("APLOS_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("APLOS_PORT", "8776")))
+    parser.add_argument("--storage-root", default=os.getenv("APLOS_STORAGE_ROOT", str(DEFAULT_STORAGE_ROOT)))
     args = parser.parse_args()
     server = ApiServer((args.host, args.port), ApiHandler, args.db, args.storage_root)
     print(f"AP Learning OS API listening on http://{args.host}:{args.port}")

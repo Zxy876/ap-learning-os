@@ -51,6 +51,7 @@ Design docs:
 - `docs/local_online_api_smoke.md`
 - `docs/material_publication_contract.md`
 - `docs/service_capabilities.md`
+- `docs/tencent_cloud_deploy.md`
 
 First online data-layer harness:
 
@@ -63,6 +64,12 @@ First online data-layer harness:
 - `online_platform/cloud_config_probe.py`
 - `online_platform/schema_postgres.sql`
 - `online_platform/static/`
+
+Deployment files:
+
+- `Dockerfile`
+- `docker-compose.tencent.yml`
+- `.env.production.example`
 
 ## State Machine
 

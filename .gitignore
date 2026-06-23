@@ -1,6 +1,8 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+.env.production
+uploads/
 
 # Local runtime state and generated evidence
 blackboard/*.md
