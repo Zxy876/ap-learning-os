@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AP Learning OS</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>AP Learning OS</h1>
+        <p id="subtitle">Workflow runtime</p>
+      </div>
+      <nav aria-label="Role navigation">
+        <a href="/author" data-route="author">Author</a>
+        <a href="/workspace" data-route="workspace">Workspace</a>
+        <a href="/review" data-route="review">Review</a>
+      </nav>
+    </header>
+    <main id="app" class="shell"></main>
+    <template id="empty-template">
+      <section class="empty">
+        <h2>No records</h2>
+        <p>The database is empty for this view.</p>
+      </section>
+    </template>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -12,6 +12,7 @@ from import_compile_snapshot import connect, dumps, stable_id
 
 BASE = Path(__file__).resolve().parents[1]
 DEFAULT_STORAGE_ROOT = BASE / "data" / "online_platform" / "storage"
+STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
 
 FINAL_STATES = {"completed", "partial", "not_completed", "failed", "blocked"}
@@ -131,6 +132,30 @@ def review_queue(conn):
         """
     ).fetchall()
     return [row_to_dict(row) for row in rows]
+
+
+def compile_summaries(conn):
+    rows = conn.execute(
+        """
+        SELECT pc.*
+        FROM plan_compiles pc
+        ORDER BY pc.imported_at DESC
+        """
+    ).fetchall()
+    summaries = []
+    for row in rows:
+        payload = row_to_dict(row)
+        payload["courses"] = json_loads(payload.pop("courses_json"), [])
+        payload["rules"] = json_loads(payload.pop("rules_json"), {})
+        payload.pop("source_snapshot_json", None)
+        payload["phase_pools"] = conn.execute("SELECT COUNT(*) FROM phase_pools WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
+        payload["plan_steps"] = conn.execute("SELECT COUNT(*) FROM plan_steps WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
+        payload["task_instances"] = conn.execute("SELECT COUNT(*) FROM task_instances WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
+        payload["material_records"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
+        payload["published_materials"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND browser_url != ''", (row["id"],)).fetchone()[0]
+        payload["missing_materials"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone()[0]
+        summaries.append(payload)
+    return summaries
 
 
 def add_evidence(conn, task_id, payload):
@@ -319,6 +344,30 @@ class ApiHandler(BaseHTTPRequestHandler):
         if include_body:
             self.wfile.write(data)
 
+    def send_static(self, relative_path, include_body=True):
+        if relative_path in {"", "/", "workspace", "review", "author"}:
+            relative_path = "index.html"
+        if ".." in relative_path:
+            self.send_json(404, {"error": "not found"})
+            return
+        file_path = (STATIC_ROOT / relative_path.lstrip("/")).resolve()
+        try:
+            file_path.relative_to(STATIC_ROOT.resolve())
+        except ValueError:
+            self.send_json(404, {"error": "not found"})
+            return
+        if not file_path.exists() or not file_path.is_file():
+            self.send_json(404, {"error": "not found"})
+            return
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        data = file_path.read_bytes() if include_body else b""
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(file_path.stat().st_size))
+        self.end_headers()
+        if include_body:
+            self.wfile.write(data)
+
     def do_OPTIONS(self):
         self.send_json(200, {"ok": True})
 
@@ -328,6 +377,9 @@ class ApiHandler(BaseHTTPRequestHandler):
         if path.startswith("/files/"):
             self.send_file(path.removeprefix("/files/").lstrip("/"), include_body=False)
             return
+        if path.startswith("/static/"):
+            self.send_static(path.removeprefix("/static/"), include_body=False)
+            return
         self.send_response(404)
         self.end_headers()
 
@@ -336,6 +388,12 @@ class ApiHandler(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             path = parsed.path.rstrip("/") or "/"
             query = parse_qs(parsed.query)
+            if path in {"/", "/workspace", "/review", "/author"}:
+                self.send_static(path.lstrip("/"))
+                return
+            if path.startswith("/static/"):
+                self.send_static(path.removeprefix("/static/"))
+                return
             if path == "/api/health":
                 self.send_json(200, {"ok": True})
                 return
@@ -356,6 +414,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/review/queue":
                 self.send_json(200, {"review_requests": review_queue(self.conn)})
+                return
+            if path == "/api/author/compiles":
+                self.send_json(200, {"compiles": compile_summaries(self.conn)})
                 return
             if path.startswith("/api/author/compiles/") and path.endswith("/summary"):
                 compile_id = path.split("/")[-2]

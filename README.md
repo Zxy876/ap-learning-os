@@ -57,6 +57,7 @@ First online data-layer harness:
 - `online_platform/import_compile_snapshot.py`
 - `online_platform/api_server.py`
 - `online_platform/publish_materials.py`
+- `online_platform/static/`
 
 ## State Machine
 

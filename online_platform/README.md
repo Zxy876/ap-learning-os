@@ -58,6 +58,14 @@ curl "http://127.0.0.1:8776/api/workspace/today?date=2026-06-22"
 curl "http://127.0.0.1:8776/api/review/queue"
 ```
 
+Open role pages:
+
+```text
+http://127.0.0.1:8776/author
+http://127.0.0.1:8776/workspace
+http://127.0.0.1:8776/review
+```
+
 Open a published material through the API:
 
 ```bash
