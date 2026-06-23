@@ -6,6 +6,8 @@ __pycache__/
 blackboard/*.md
 data/*.json
 data/**/*.json
+data/**/*.sqlite3
+data/**/*.db
 logs/*.log
 sessions/*
 task_materials/*
