@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import datetime as dt
 import json
 import mimetypes
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -130,6 +132,11 @@ def storage_path(storage_root, storage_key):
     return path
 
 
+def safe_filename(name):
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", name or "evidence.bin").strip(".-")
+    return cleaned or "evidence.bin"
+
+
 def review_queue(conn):
     rows = conn.execute(
         """
@@ -208,6 +215,51 @@ def add_evidence(conn, task_id, payload):
             payload.get("storage_key") or "",
             payload.get("text_note") or "",
             dumps(payload.get("metadata") or {}),
+        ),
+    )
+    conn.execute("UPDATE task_instances SET status = 'needs_review' WHERE id = ? AND status = 'planned'", (task_id,))
+    conn.commit()
+    return row_to_dict(conn.execute("SELECT * FROM evidence_artifacts WHERE id = ?", (evidence_id,)).fetchone())
+
+
+def add_evidence_upload(conn, storage_root, task_id, payload):
+    if not conn.execute("SELECT 1 FROM task_instances WHERE id = ?", (task_id,)).fetchone():
+        raise KeyError("task not found")
+    raw = payload.get("data_base64") or ""
+    if "," in raw and raw.split(",", 1)[0].startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except Exception as exc:
+        raise ValueError("data_base64 must be valid base64") from exc
+    max_bytes = int(os.getenv("APLOS_MAX_EVIDENCE_BYTES", str(20 * 1024 * 1024)))
+    if len(data) > max_bytes:
+        raise ValueError(f"evidence file is too large; max {max_bytes} bytes")
+    filename = safe_filename(payload.get("filename") or "evidence.bin")
+    evidence_id = stable_id("evidence", task_id, filename, len(data), dt.datetime.now().isoformat())
+    storage_key = f"evidence/{task_id}/{evidence_id}-{filename}"
+    output_path = storage_path(storage_root, storage_key)
+    if not output_path:
+        raise ValueError("invalid storage key")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    conn.execute(
+        """
+        INSERT INTO evidence_artifacts
+          (id, task_instance_id, artifact_type, storage_key, text_note, metadata_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            evidence_id,
+            task_id,
+            payload.get("artifact_type") or "file",
+            storage_key,
+            payload.get("text_note") or "",
+            dumps({
+                "filename": filename,
+                "content_type": payload.get("content_type") or "",
+                "size_bytes": len(data),
+            }),
         ),
     )
     conn.execute("UPDATE task_instances SET status = 'needs_review' WHERE id = ? AND status = 'planned'", (task_id,))
@@ -515,6 +567,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                     return
                 task_id = path.split("/")[-2]
                 self.send_json(201, add_evidence(self.conn, task_id, payload))
+                return
+            if path.startswith("/api/tasks/") and path.endswith("/evidence-upload"):
+                if not self.require_role("executor"):
+                    return
+                task_id = path.split("/")[-2]
+                self.send_json(201, add_evidence_upload(self.conn, self.server.storage_root, task_id, payload))
                 return
             if path.startswith("/api/tasks/") and path.endswith("/review-requests"):
                 if not self.require_role("executor"):

@@ -107,6 +107,13 @@ http://SERVER_PUBLIC_IP:8776/workspace
 http://SERVER_PUBLIC_IP:8776/review
 ```
 
+Executor evidence uploads are stored under `APLOS_STORAGE_ROOT/evidence`.
+The default upload limit is 20 MB. Override it with:
+
+```text
+APLOS_MAX_EVIDENCE_BYTES=20971520
+```
+
 ## Import A Compile Snapshot
 
 Compile snapshots are generated locally from the plan/resource files, then

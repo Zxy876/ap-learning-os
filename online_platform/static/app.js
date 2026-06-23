@@ -55,6 +55,15 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 function tokenControls(route) {
   const input = el("input", {
     type: "password",
@@ -140,11 +149,29 @@ function renderTaskDetail(task, detail) {
     ]));
   });
   const note = el("textarea", { placeholder: "Evidence note, screenshot description, or external file link." });
+  const evidenceFile = el("input", { type: "file", accept: "image/*,application/pdf,.txt,.md" });
   const addEvidence = el("button", { text: "Add Evidence" });
   addEvidence.addEventListener("click", async () => {
     await api(`/api/tasks/${task.id}/evidence`, {
       method: "POST",
       body: JSON.stringify({ artifact_type: "note", text_note: note.value }),
+    });
+    renderTaskDetail(await api(`/api/tasks/${task.id}`), detail);
+  });
+  const uploadEvidence = el("button", { text: "Upload Evidence File" });
+  uploadEvidence.addEventListener("click", async () => {
+    const file = evidenceFile.files && evidenceFile.files[0];
+    if (!file) throw new Error("Choose a file first.");
+    const dataUrl = await fileToDataUrl(file);
+    await api(`/api/tasks/${task.id}/evidence-upload`, {
+      method: "POST",
+      body: JSON.stringify({
+        artifact_type: file.type && file.type.startsWith("image/") ? "screenshot" : "file",
+        filename: file.name,
+        content_type: file.type,
+        data_base64: dataUrl,
+        text_note: note.value,
+      }),
     });
     renderTaskDetail(await api(`/api/tasks/${task.id}`), detail);
   });
@@ -159,10 +186,19 @@ function renderTaskDetail(task, detail) {
     el("h3", { text: "Materials" }),
     materials,
     el("h3", { text: "Evidence" }),
-    ...task.evidence.map((item) => el("div", { class: "material" }, [el("strong", { text: item.artifact_type }), el("p", { text: item.text_note || item.storage_key })])),
+    ...task.evidence.map((item) => evidenceBlock(item)),
     note,
-    el("div", { class: "actions" }, [addEvidence, requestReview]),
+    evidenceFile,
+    el("div", { class: "actions" }, [addEvidence, uploadEvidence, requestReview]),
   );
+}
+
+function evidenceBlock(item) {
+  return el("div", { class: "material" }, [
+    el("strong", { text: item.artifact_type }),
+    item.text_note ? el("p", { text: item.text_note }) : null,
+    item.storage_key ? el("a", { href: `/files/${item.storage_key}`, target: "_blank", rel: "noreferrer", text: item.storage_key }) : null,
+  ]);
 }
 
 async function renderReview() {
@@ -218,7 +254,7 @@ function renderReviewDetail(request, task, detail, reload) {
     el("h2", { text: task.title }),
     el("div", { class: "meta" }, [statusPill(task.status), el("span", { class: "pill", text: task.source_lineage.sheet }), el("span", { class: "pill", text: `row ${task.source_lineage.row_number}` })]),
     el("h3", { text: "Evidence" }),
-    ...task.evidence.map((item) => el("div", { class: "material" }, [el("strong", { text: item.artifact_type }), el("p", { text: item.text_note || item.storage_key })])),
+    ...task.evidence.map((item) => evidenceBlock(item)),
     el("h3", { text: "Decision" }),
     el("label", { text: "Final state" }, [state]),
     el("label", { text: "Failure type" }, [failure]),
