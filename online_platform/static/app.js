@@ -301,7 +301,7 @@ async function renderAuthor() {
   publishLocal.addEventListener("click", async () => {
     const result = await api("/api/author/materials/publish", {
       method: "POST",
-      body: JSON.stringify({ backend: "local", base_url: window.location.origin }),
+      body: JSON.stringify({ backend: "local", base_url: `${window.location.origin}${basePath()}` }),
     });
     publishResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh material counts.`;
   });

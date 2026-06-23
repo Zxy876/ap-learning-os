@@ -107,6 +107,19 @@ http://SERVER_PUBLIC_IP:8776/workspace
 http://SERVER_PUBLIC_IP:8776/review
 ```
 
+If port `8776` is not open in the Tencent security group but port `80` is
+already served by an nginx container, AP Learning OS can also be reverse
+proxied under a subpath:
+
+```text
+http://SERVER_PUBLIC_IP/aplos/author
+http://SERVER_PUBLIC_IP/aplos/workspace
+http://SERVER_PUBLIC_IP/aplos/review
+```
+
+In that mode, publish local materials with base URL
+`http://SERVER_PUBLIC_IP/aplos` so file URLs become `/aplos/files/...`.
+
 Executor evidence uploads are stored under `APLOS_STORAGE_ROOT/evidence`.
 The default upload limit is 20 MB. Override it with:
 
