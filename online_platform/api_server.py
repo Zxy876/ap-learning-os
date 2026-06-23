@@ -68,6 +68,12 @@ def json_loads(value, fallback):
         return fallback
 
 
+def json_default(value):
+    if isinstance(value, (dt.date, dt.datetime)):
+        return value.isoformat()
+    return str(value)
+
+
 def today_tasks(conn, date):
     rows = conn.execute(
         """
@@ -400,7 +406,7 @@ class ApiHandler(BaseHTTPRequestHandler):
     server_version = "APLearningOSAPI/0.1"
 
     def send_json(self, status, payload):
-        body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False, indent=2, default=json_default).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
