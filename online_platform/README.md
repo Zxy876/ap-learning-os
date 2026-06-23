@@ -96,6 +96,14 @@ python3 online_platform/process_writebacks.py \
   --db data/online_platform/aplos_dev.sqlite3
 ```
 
+Apply pending writebacks to Google Sheets:
+
+```bash
+python3 online_platform/google_sheets_writeback.py \
+  --db data/online_platform/aplos_dev.sqlite3 \
+  --spreadsheet-id YOUR_GOOGLE_SHEET_ID
+```
+
 Probe local cloud/auth configuration without printing secrets:
 
 ```bash

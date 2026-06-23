@@ -59,7 +59,9 @@ First online data-layer harness:
 - `online_platform/api_server.py`
 - `online_platform/publish_materials.py`
 - `online_platform/process_writebacks.py`
+- `online_platform/google_sheets_writeback.py`
 - `online_platform/cloud_config_probe.py`
+- `online_platform/schema_postgres.sql`
 - `online_platform/static/`
 
 ## State Machine

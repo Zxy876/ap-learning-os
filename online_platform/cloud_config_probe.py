@@ -28,11 +28,13 @@ ENV_GROUPS = {
         "GOOGLE_SERVICE_ACCOUNT_JSON",
         "GOOGLE_CLIENT_ID",
         "GOOGLE_CLIENT_SECRET",
+        "APLOS_GOOGLE_SHEET_ID",
     ],
     "database": [
         "DATABASE_URL",
         "POSTGRES_URL",
         "SUPABASE_DB_URL",
+        "APLOS_DATABASE_PROVIDER",
     ],
 }
 

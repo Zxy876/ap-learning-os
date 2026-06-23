@@ -1,3 +1,7 @@
 openpyxl>=3.1.0
 pypdf>=5.0.0
 
+# Optional hosted-service adapters:
+# boto3>=1.34.0
+# google-api-python-client>=2.0.0
+# google-auth>=2.0.0

@@ -89,6 +89,44 @@ APLOS Task Title
 
 Use `--in-place` only when intentionally writing into the source workbook.
 
+## Google Sheets Writeback
+
+Implemented as an optional adapter:
+
+```bash
+python3 online_platform/google_sheets_writeback.py \
+  --db data/online_platform/aplos_dev.sqlite3 \
+  --spreadsheet-id YOUR_GOOGLE_SHEET_ID
+```
+
+Required optional dependencies:
+
+```text
+google-api-python-client
+google-auth
+```
+
+Credential options:
+
+```text
+GOOGLE_SERVICE_ACCOUNT_JSON
+GOOGLE_APPLICATION_CREDENTIALS
+Google application default credentials
+```
+
+The adapter writes the same APLOS review columns used by the Excel writer.
+
+## Postgres
+
+Implemented as a migration target draft:
+
+```text
+online_platform/schema_postgres.sql
+```
+
+This mirrors the SQLite schema and converts JSON/text/date fields to Postgres
+types such as `JSONB`, `DATE`, and `TIMESTAMPTZ`.
+
 ## Cloud Config Probe
 
 Implemented:
@@ -102,9 +140,7 @@ masks values and does not print secrets.
 
 ## Not Yet Implemented
 
-- Google Sheets API writeback
 - production Postgres migration
 - real user invitation and organization permissions
 - deployed HTTPS server
 - production object storage authorization policy
-
