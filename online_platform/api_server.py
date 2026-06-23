@@ -84,12 +84,19 @@ def json_default(value):
 def today_tasks(conn, date):
     rows = conn.execute(
         """
-        SELECT id, scheduled_date, course, unit, phase, title, runner, kind,
-               status, target_minutes, observable_goal, completion_criteria_json,
-               source_lineage_json, browser_workflow_json
-        FROM task_instances
-        WHERE scheduled_date = ?
-        ORDER BY course, title
+        SELECT ti.id, ti.scheduled_date, ti.course, ti.unit, ti.phase, ti.title, ti.runner, ti.kind,
+               ti.status, ti.target_minutes, ti.observable_goal, ti.completion_criteria_json,
+               ti.source_lineage_json, ti.browser_workflow_json
+        FROM task_instances ti
+        JOIN plan_compiles pc ON pc.id = ti.plan_compile_id
+        WHERE ti.scheduled_date = ?
+          AND pc.imported_at = (
+            SELECT MAX(pc2.imported_at)
+            FROM task_instances ti2
+            JOIN plan_compiles pc2 ON pc2.id = ti2.plan_compile_id
+            WHERE ti2.course = ti.course
+          )
+        ORDER BY ti.course, ti.title
         """,
         (date,),
     ).fetchall()

@@ -301,8 +301,8 @@ async function renderAuthor() {
       const result = await api("/api/author/compile-from-plans", {
         method: "POST",
         body: JSON.stringify({
-          organization_id: orgId.value,
-          organization_name: orgName.value,
+          organization_id: "org_hosted_ap_learning_os",
+          organization_name: "Hosted AP Learning OS",
           start_date: compileStart.value,
           days: Number(compileDays.value || 30),
           plan_files: await Promise.all(selectedPlans.map(toPayload)),
@@ -316,45 +316,6 @@ async function renderAuthor() {
       compileResult.textContent = `Error: ${error.message || String(error)}`;
     }
   });
-  const snapshotText = el("textarea", { placeholder: "Paste compile snapshot JSON here." });
-  const snapshotFile = el("input", { type: "file", accept: "application/json,.json" });
-  snapshotFile.addEventListener("change", async () => {
-    const file = snapshotFile.files && snapshotFile.files[0];
-    if (!file) return;
-    snapshotText.value = await file.text();
-  });
-  const orgId = el("input", { type: "text", value: "org_hosted_ap_learning_os" });
-  const orgName = el("input", { type: "text", value: "Hosted AP Learning OS" });
-  const importResult = el("pre", { class: "result", text: "" });
-  const importButton = el("button", { class: "primary", text: "Import Snapshot" });
-  importButton.addEventListener("click", async () => {
-    const imported = await api("/api/author/compiles/import", {
-      method: "POST",
-      body: JSON.stringify({
-        organization_id: orgId.value,
-        organization_name: orgName.value,
-        snapshot: JSON.parse(snapshotText.value),
-      }),
-    });
-    importResult.textContent = `${JSON.stringify(imported, null, 2)}\n\nReload the page to refresh compile summaries.`;
-  });
-  const publishResult = el("pre", { class: "result", text: "" });
-  const publishLocal = el("button", { text: "Publish Local Materials" });
-  publishLocal.addEventListener("click", async () => {
-    const result = await api("/api/author/materials/publish", {
-      method: "POST",
-      body: JSON.stringify({ backend: "local", base_url: `${window.location.origin}${basePath()}` }),
-    });
-    publishResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh material counts.`;
-  });
-  const publishS3 = el("button", { text: "Publish S3/COS" });
-  publishS3.addEventListener("click", async () => {
-    const result = await api("/api/author/materials/publish", {
-      method: "POST",
-      body: JSON.stringify({ backend: "s3" }),
-    });
-    publishResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh material counts.`;
-  });
   const tools = el("section", { class: "record" }, [
     el("h2", { text: "Compile From Excel Plans" }),
     el("div", { class: "toolbar" }, [
@@ -365,19 +326,6 @@ async function renderAuthor() {
     ]),
     el("div", { class: "actions" }, [compileButton]),
     compileResult,
-    el("h2", { text: "Import Compile Snapshot" }),
-    el("div", { class: "toolbar" }, [
-      el("label", { text: "Organization ID" }, [orgId]),
-      el("label", { text: "Organization Name" }, [orgName]),
-      el("label", { text: "Snapshot File" }, [snapshotFile]),
-    ]),
-    snapshotText,
-    el("div", { class: "actions" }, [importButton]),
-    importResult,
-    el("h2", { text: "Publish Materials" }),
-    el("p", { text: "Local publish requires source files to exist on the server. S3/COS publish requires storage environment variables." }),
-    el("div", { class: "actions" }, [publishLocal, publishS3]),
-    publishResult,
   ]);
   const data = await api("/api/author/compiles");
   const list = el("section", { class: "list" });
