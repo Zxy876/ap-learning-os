@@ -162,6 +162,15 @@ docker compose -f docker-compose.tencent.yml exec ap-learning-os \
 If materials are not copied to the server, author/workspace pages still show
 tasks, but file URLs for local PDF material cannot be published.
 
+If compile snapshots were generated on a Mac and materials are copied to
+`./uploads/task_materials` on the server, set a path rewrite in
+`.env.production`:
+
+```text
+APLOS_LOCAL_PATH_REWRITE_FROM=/Users/name/path/AP_Learning_OS/task_materials
+APLOS_LOCAL_PATH_REWRITE_TO=/app/uploads/task_materials
+```
+
 ## Role Tokens In The Browser
 
 If `APLOS_AUTHOR_TOKEN`, `APLOS_EXECUTOR_TOKEN`, or `APLOS_REVIEWER_TOKEN` are

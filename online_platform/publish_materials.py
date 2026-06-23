@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 from pathlib import Path
 
 from import_compile_snapshot import connect
 from storage_adapters import BASE, DEFAULT_STORAGE_ROOT, adapter_from_args
+
+
+def rewrite_local_target(local_target):
+    rewrites = {}
+    raw = os.getenv("APLOS_LOCAL_PATH_REWRITES_JSON", "")
+    if raw:
+        rewrites.update(json.loads(raw))
+    source = os.getenv("APLOS_LOCAL_PATH_REWRITE_FROM", "")
+    target = os.getenv("APLOS_LOCAL_PATH_REWRITE_TO", "")
+    if source and target:
+        rewrites[source] = target
+    for old_prefix, new_prefix in sorted(rewrites.items(), key=lambda item: len(item[0]), reverse=True):
+        if local_target.startswith(old_prefix):
+            return f"{new_prefix.rstrip('/')}/{local_target[len(old_prefix):].lstrip('/')}"
+    return local_target
 
 
 def publish_materials(conn, adapter):
@@ -36,7 +52,7 @@ def publish_materials(conn, adapter):
         if row["storage_key"] and row["browser_url"]:
             result["already_published"] += 1
             continue
-        local_target = row["local_target"]
+        local_target = rewrite_local_target(row["local_target"])
         if not local_target or not Path(local_target).exists():
             result["missing_local_files"].append({"material_id": row["id"], "local_target": local_target})
             continue
