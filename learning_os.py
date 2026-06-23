@@ -82,10 +82,12 @@ def slug(value):
 
 def row_dicts(ws, header_row):
     headers = [cell.value for cell in ws[header_row]]
-    for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+    for row_number, row in enumerate(ws.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1):
         if not any(v not in (None, "") for v in row):
             continue
-        yield {headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
+        data = {headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
+        data["__row_number"] = row_number
+        yield data
 
 
 def normalize_plan_mmdd(raw_date, year):
@@ -1970,6 +1972,9 @@ def canonical_bc_steps(config):
         global_day = global_end
         steps.append({
             "course": "AP_Calculus_BC",
+            "source_workbook": str(plan),
+            "source_sheet": "每日计划",
+            "source_row_number": row.get("__row_number"),
             "phase": workflow_phase(row),
             "phase_name": row.get("阶段"),
             "unit": row.get("Unit"),
@@ -2005,6 +2010,9 @@ def canonical_csa_steps(config):
         actual_date = plan_date + offset if plan_date else None
         steps.append({
             "course": "AP_CSA",
+            "source_workbook": str(plan),
+            "source_sheet": "每日刷题计划",
+            "source_row_number": row.get("__row_number"),
             "phase": workflow_phase(row),
             "phase_name": row.get("阶段"),
             "unit": row.get("Unit"),
@@ -2151,6 +2159,206 @@ def plan_delays(args):
         )
 
 
+def json_safe(value):
+    if isinstance(value, (dt.date, dt.datetime)):
+        return value.isoformat()
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
+
+
+def compile_id_for_payload(payload):
+    raw = json.dumps(json_safe(payload), ensure_ascii=False, sort_keys=True)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def material_contract(resource):
+    target = resource.get("target") or ""
+    if resource.get("missing"):
+        target_type = "missing"
+    elif is_url(target):
+        target_type = "url"
+    elif target:
+        target_type = "file"
+    else:
+        target_type = "unknown"
+    return {
+        "label": resource.get("label"),
+        "target_type": target_type,
+        "local_target": target if target_type == "file" else "",
+        "external_url": target if target_type == "url" else "",
+        "source": resource.get("source"),
+        "source_local_path": resource.get("source") if resource.get("source") and Path(str(resource.get("source"))).exists() else "",
+        "page_range": resource.get("page_range"),
+        "sections": resource.get("sections"),
+        "match": resource.get("match"),
+        "match_confidence": resource.get("match_confidence"),
+        "top_hits": resource.get("top_hits"),
+        "index": {
+            "filename": resource.get("index_filename"),
+            "category": resource.get("index_category"),
+            "unit": resource.get("index_unit"),
+            "row": resource.get("index_row"),
+        },
+        "missing": bool(resource.get("missing")),
+        "upload_required": target_type == "file",
+        "browser_openable": target_type in {"file", "url"},
+    }
+
+
+def task_contract(task):
+    source = task.get("source", {})
+    step = source.get("plan_step", {})
+    return {
+        "id": task.get("id"),
+        "task_key": task.get("task_key"),
+        "course": task.get("course"),
+        "kind": task.get("kind"),
+        "runner": task.get("runner"),
+        "phase": task.get("phase"),
+        "scheduled_date": task.get("date"),
+        "unit": task.get("unit"),
+        "title": task.get("title"),
+        "target_minutes": task.get("target_min"),
+        "observable_goal": task.get("observable_goal"),
+        "completion_criteria": task.get("completion_criteria", []),
+        "source_lineage": {
+            "workbook": source.get("workbook"),
+            "sheet": source.get("sheet"),
+            "row_number": step.get("source_row_number"),
+            "plan_step_day_label": step.get("day_label"),
+            "global_day_range": step.get("global_day_range"),
+            "mapped_global_day_number": source.get("mapped_global_day_number"),
+        },
+        "browser_workflow": [
+            {
+                "type": "external_url" if item.get("type") == "url" else item.get("type"),
+                "target": item.get("target"),
+                "local_app_only": item.get("type") == "app",
+            }
+            for item in task.get("launch", [])
+        ],
+        "materials": [material_contract(resource) for resource in task.get("resources", [])],
+    }
+
+
+def plan_step_contract(step):
+    row = step.get("row", {})
+    return {
+        "course": step.get("course"),
+        "source_workbook": step.get("source_workbook"),
+        "source_sheet": step.get("source_sheet"),
+        "source_row_number": step.get("source_row_number"),
+        "phase": step.get("phase"),
+        "phase_name": step.get("phase_name"),
+        "unit": step.get("unit"),
+        "day_label": step.get("day_label"),
+        "plan_date": step.get("plan_date"),
+        "actual_date": step.get("actual_date"),
+        "global_day_range": step.get("global_day_range"),
+        "duration_days": step.get("duration_days"),
+        "title": step.get("title"),
+        "runner": step.get("runner"),
+        "practice_ids": step.get("practice_ids"),
+        "resource_hints": {
+            "primary_file": row.get("文件名（可直接打开）"),
+            "reference": row.get("课件/课本参考"),
+            "practice_or_answer": row.get("配套练习/答案"),
+            "question_file": row.get("题目文件"),
+            "answer_file": row.get("答案文件"),
+        },
+        "source_row": row,
+    }
+
+
+def compile_snapshot(config, start_date, days, course=None, include_materials=True):
+    courses = [course] if course else ["AP_Calculus_BC", "AP_CSA"]
+    snapshot_state = {"tasks": {}, "sessions": {}, "adaptive_time": {}, "schedule_delay_events": []}
+    all_steps = []
+    all_phase_pools = []
+    task_instances = []
+    for selected_course in courses:
+        steps = canonical_csa_steps(config) if selected_course == "AP_CSA" else canonical_bc_steps(config)
+        all_steps.extend(plan_step_contract(step) for step in steps)
+        all_phase_pools.extend(phase_pool(config, selected_course))
+    for offset in range(days):
+        current_date = start_date + dt.timedelta(days=offset)
+        tasks = []
+        if not course or course == "AP_Calculus_BC":
+            tasks.extend(build_bc_tasks(config, snapshot_state, current_date))
+        if not course or course == "AP_CSA":
+            tasks.extend(build_csa_tasks(config, snapshot_state, current_date))
+        for task in tasks:
+            contract = task_contract(task)
+            if not include_materials:
+                contract["materials"] = []
+            task_instances.append(contract)
+    base_payload = {
+        "schema_version": "aplos.compile_snapshot.v1",
+        "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+        "start_date": start_date.isoformat(),
+        "days": days,
+        "courses": courses,
+        "source_plans": {
+            "AP_Calculus_BC": config["plans"].get("AP_Calculus_BC"),
+            "AP_CSA": config["plans"].get("AP_CSA"),
+        },
+        "rules": {
+            "AP_Calculus_BC": {
+                "type": "anchor_global_day",
+                "anchor": config.get("planner", {}).get("bc_anchor"),
+            },
+            "AP_CSA": {
+                "type": "plan_date_offset",
+                "plan_start_date": config.get("planner", {}).get("csa_plan_start_date"),
+                "actual_start_date": config.get("planner", {}).get("csa_actual_start_date"),
+            },
+            "delay_policy": {
+                "default_scope": "course_local",
+                "not_completed_adds_days": 1,
+            },
+        },
+        "phase_pools": all_phase_pools,
+        "plan_steps": all_steps,
+        "task_instances": task_instances,
+        "import_notes": [
+            "local_target files must be uploaded to object storage before browser workflows can use them",
+            "local_app_only launch entries are ignored by the online browser runtime",
+            "source_lineage row_number is the writeback anchor for reviewer decisions",
+        ],
+    }
+    payload = json_safe(base_payload)
+    payload["compile_id"] = compile_id_for_payload({k: v for k, v in payload.items() if k not in {"generated_at"}})
+    return payload
+
+
+def compile_export(args):
+    config = load_config()
+    start = parse_date_arg(args.start) if args.start else today_date()
+    snapshot = compile_snapshot(
+        config,
+        start,
+        args.days,
+        course=args.course,
+        include_materials=not args.no_materials,
+    )
+    output = Path(args.output) if args.output else BASE / "data" / "exports" / f"compile_snapshot_{start.isoformat()}_{args.days}d.json"
+    write_json(output, snapshot)
+    summary = {
+        "compile_id": snapshot["compile_id"],
+        "output": str(output),
+        "plan_steps": len(snapshot["plan_steps"]),
+        "phase_pools": len(snapshot["phase_pools"]),
+        "task_instances": len(snapshot["task_instances"]),
+        "materials": sum(len(task.get("materials", [])) for task in snapshot["task_instances"]),
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
 def cmd_today(args):
     config = load_config()
     state = load_state()
@@ -2212,6 +2420,13 @@ def main():
     p_delays.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
     p_delays.add_argument("--format", choices=["text", "json"], default="text")
     p_delays.set_defaults(func=plan_delays)
+    p_compile = sub.add_parser("compile-export", help="export a web-importable compiled plan snapshot")
+    p_compile.add_argument("--start", help="YYYY-MM-DD")
+    p_compile.add_argument("--days", type=int, default=30)
+    p_compile.add_argument("--course", choices=["AP_CSA", "AP_Calculus_BC"])
+    p_compile.add_argument("--output", help="output JSON path")
+    p_compile.add_argument("--no-materials", action="store_true", help="skip task material bindings")
+    p_compile.set_defaults(func=compile_export)
     p_reset = sub.add_parser("reset-task", help="reset a task to Planned after accidental/test start")
     p_reset.add_argument("--task", required=True)
     p_reset.set_defaults(func=reset_task)

@@ -47,6 +47,7 @@ Design docs:
 - `docs/online_platform_architecture.md`
 - `docs/online_platform_api.md`
 - `docs/online_platform_infra_checklist.md`
+- `docs/compile_snapshot_contract.md`
 
 ## State Machine
 
@@ -200,6 +201,24 @@ Stop it:
 ```bash
 launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.aplearningos.blackboard.plist"
 ```
+
+Export a web-importable compile snapshot:
+
+```bash
+python3 learning_os.py compile-export --start 2026-06-22 --days 30
+```
+
+The export includes:
+
+- normalized plan steps with source workbook/sheet/row lineage
+- phase pools
+- generated task instances for the requested date window
+- browser workflow entries
+- material bindings with local file/upload requirements
+
+Generated compile exports are local runtime artifacts under `data/exports/` and
+are intentionally not committed because they include local file paths and may
+reference private or copyrighted materials.
 
 ## Local Resource Redirects
 

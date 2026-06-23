@@ -5,6 +5,7 @@ __pycache__/
 # Local runtime state and generated evidence
 blackboard/*.md
 data/*.json
+data/**/*.json
 logs/*.log
 sessions/*
 task_materials/*
@@ -19,4 +20,3 @@ task_materials/*
 # Do not commit generated/copyrighted study excerpts
 *.pdf
 *.png
-
