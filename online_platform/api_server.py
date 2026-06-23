@@ -201,6 +201,15 @@ def safe_extract_zip(zip_path, output_dir):
     return extracted
 
 
+def infer_plan_course(filename):
+    name = filename.lower()
+    if any(token in name for token in ["csa", "computer", "java", "计算机"]):
+        return "AP_CSA"
+    if any(token in name for token in ["bc", "calculus", "微积分"]):
+        return "AP_Calculus_BC"
+    return None
+
+
 def review_queue(conn):
     rows = conn.execute(
         """
@@ -351,8 +360,14 @@ def create_review_request(conn, task_id):
 
 
 def compile_from_uploaded_plans(conn, storage_root, payload):
-    bc_file = decode_upload_file(payload.get("bc_plan_file"), required=True)
-    csa_file = decode_upload_file(payload.get("csa_plan_file"), required=True)
+    plan_payloads = payload.get("plan_files") or []
+    if payload.get("bc_plan_file"):
+        plan_payloads.append({**payload["bc_plan_file"], "course": "AP_Calculus_BC"})
+    if payload.get("csa_plan_file"):
+        plan_payloads.append({**payload["csa_plan_file"], "course": "AP_CSA"})
+    if not plan_payloads:
+        raise ValueError("choose at least one plan Excel file")
+    plan_files = [decode_upload_file(item, required=True) | {"course": item.get("course")} for item in plan_payloads]
     resource_zip = decode_upload_file(payload.get("resource_zip_file"), required=False)
 
     start = dt.date.fromisoformat(payload.get("start_date") or dt.date.today().isoformat())
@@ -360,17 +375,25 @@ def compile_from_uploaded_plans(conn, storage_root, payload):
     if days < 1 or days > 370:
         raise ValueError("days must be between 1 and 370")
 
-    upload_id = stable_id("authorupload", start.isoformat(), days, bc_file["filename"], csa_file["filename"], dt.datetime.now().isoformat())
+    upload_id = stable_id("authorupload", start.isoformat(), days, ",".join(item["filename"] for item in plan_files), dt.datetime.now().isoformat())
     upload_root = Path(os.getenv("APLOS_UPLOAD_ROOT", str(DEFAULT_UPLOAD_ROOT))) / "author" / upload_id
     plans_dir = upload_root / "plans"
     resources_dir = upload_root / "resources"
     plans_dir.mkdir(parents=True, exist_ok=True)
     resources_dir.mkdir(parents=True, exist_ok=True)
 
-    bc_path = plans_dir / bc_file["filename"]
-    csa_path = plans_dir / csa_file["filename"]
-    bc_path.write_bytes(bc_file["data"])
-    csa_path.write_bytes(csa_file["data"])
+    uploaded_courses = {}
+    unknown_files = []
+    for item in plan_files:
+        course = item.get("course") or infer_plan_course(item["filename"])
+        plan_path = plans_dir / item["filename"]
+        plan_path.write_bytes(item["data"])
+        if course in {"AP_Calculus_BC", "AP_CSA"}:
+            uploaded_courses[course] = str(plan_path)
+        else:
+            unknown_files.append(item["filename"])
+    if unknown_files:
+        raise ValueError(f"could not infer course from plan filename(s): {', '.join(unknown_files)}")
 
     extracted_files = 0
     if resource_zip:
@@ -381,10 +404,10 @@ def compile_from_uploaded_plans(conn, storage_root, payload):
     config = copy.deepcopy(load_config())
     config["workspace_root"] = str(resources_dir)
     config.setdefault("plans", {})
-    config["plans"]["AP_Calculus_BC"] = str(bc_path)
-    config["plans"]["AP_CSA"] = str(csa_path)
+    config["plans"].update(uploaded_courses)
     RESOURCE_RESOLUTION_CACHE.clear()
-    snapshot = compile_snapshot(config, start, days, course=payload.get("course") or None, include_materials=True)
+    course = payload.get("course") or (next(iter(uploaded_courses)) if len(uploaded_courses) == 1 else None)
+    snapshot = compile_snapshot(config, start, days, course=course, include_materials=True)
 
     snapshot_path = upload_root / f"compile_snapshot_{snapshot['compile_id']}.json"
     snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -401,6 +424,7 @@ def compile_from_uploaded_plans(conn, storage_root, payload):
     result.update({
         "upload_id": upload_id,
         "snapshot_path": str(snapshot_path),
+        "uploaded_courses": sorted(uploaded_courses),
         "resource_zip_extracted_files": extracted_files,
         "publish_result": publish_result,
     })

@@ -126,9 +126,10 @@ The Author page can compile directly from uploaded Excel plans:
 
 1. Open `/aplos/author`.
 2. Save the author token.
-3. In `Compile From Excel Plans`, choose the BC plan Excel file and CSA plan
-   Excel file.
-4. Optionally upload a ZIP of resource PDFs. The compiler searches extracted
+3. In `Compile From Excel Plans`, choose one or more plan Excel files. Course
+   is inferred from filenames such as `CSA`, `Computer`, `Java`, `BC`, or
+   `Calculus`.
+4. Upload one optional ZIP of resource PDFs. The compiler searches extracted
    resource filenames when matching the plan's resource index.
 5. Click `Compile + Import From Excel Plans`.
 
