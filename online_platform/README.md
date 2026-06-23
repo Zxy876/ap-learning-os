@@ -35,6 +35,38 @@ python3 online_platform/import_compile_snapshot.py \
   --summary-only
 ```
 
+Run the local API skeleton:
+
+```bash
+python3 online_platform/api_server.py \
+  --db data/online_platform/aplos_dev.sqlite3 \
+  --port 8776
+```
+
+Example API calls:
+
+```bash
+curl "http://127.0.0.1:8776/api/workspace/today?date=2026-06-22"
+curl "http://127.0.0.1:8776/api/review/queue"
+```
+
+Create evidence for a task:
+
+```bash
+curl -X POST "http://127.0.0.1:8776/api/tasks/TASK_ID/evidence" \
+  -H "Content-Type: application/json" \
+  -d '{"artifact_type":"note","text_note":"Worked in browser for 35 minutes."}'
+```
+
+Submit and decide review:
+
+```bash
+curl -X POST "http://127.0.0.1:8776/api/tasks/TASK_ID/review-requests"
+curl -X POST "http://127.0.0.1:8776/api/review/requests/REVIEW_ID/decision" \
+  -H "Content-Type: application/json" \
+  -d '{"final_state":"not_completed","failure_type":"insufficient_evidence","message":"Need clearer screenshot evidence."}'
+```
+
 ## What This Imports
 
 - organization placeholder
@@ -58,4 +90,3 @@ inventing credentials.
 
 The schema is intentionally close to the Postgres model in
 `docs/online_platform_api.md`.
-
