@@ -30,6 +30,24 @@ Core rule: the system never marks a task completed by itself. Detectors can only
    - Applies deterministic task transitions.
    - Updates adaptive time after uone review.
 
+## Online Platform Direction
+
+The local macOS app is the executor-facing prototype. The online version is
+specified as a multi-role plan compiler and browser workflow runtime:
+
+- A / Rule Author: uploads spreadsheets/resources, runs a sandbox compiler, and
+  publishes a compiled plan version.
+- B / Plan Executor: uses browser-only task workflows, opens generated material
+  slices, uploads evidence, and requests review.
+- C / Plan Supervisor: reviews evidence, makes the final task decision, triggers
+  schedule changes, and writes results back to the plan record.
+
+Design docs:
+
+- `docs/online_platform_architecture.md`
+- `docs/online_platform_api.md`
+- `docs/online_platform_infra_checklist.md`
+
 ## State Machine
 
 Allowed task states:
