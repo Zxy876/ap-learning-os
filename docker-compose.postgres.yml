@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ap-learning-os-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${APLOS_POSTGRES_DB:-ap_learning_os}
+      POSTGRES_USER: ${APLOS_POSTGRES_USER:-aplos}
+      POSTGRES_PASSWORD: ${APLOS_POSTGRES_PASSWORD:-change-postgres-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APLOS_POSTGRES_USER:-aplos} -d ${APLOS_POSTGRES_DB:-ap_learning_os}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ap-learning-os:
+    build: .
+    container_name: ap-learning-os
+    restart: unless-stopped
+    env_file:
+      - path: .env.production
+        required: false
+    environment:
+      APLOS_HOST: 0.0.0.0
+      APLOS_PORT: 8776
+      APLOS_DATABASE_URL: postgresql://${APLOS_POSTGRES_USER:-aplos}:${APLOS_POSTGRES_PASSWORD:-change-postgres-password}@postgres:5432/${APLOS_POSTGRES_DB:-ap_learning_os}
+      APLOS_STORAGE_ROOT: /app/data/online_platform/storage
+    ports:
+      - "8776:8776"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

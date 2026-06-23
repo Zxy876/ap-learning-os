@@ -44,13 +44,17 @@ ROLE_TOKENS = {
 def row_to_dict(row):
     if row is None:
         return None
+    if isinstance(row, dict):
+        return dict(row)
     return {key: row[key] for key in row.keys()}
 
 
 def json_loads(value, fallback):
+    if isinstance(value, (dict, list)):
+        return value
     try:
         return json.loads(value) if value else fallback
-    except json.JSONDecodeError:
+    except (TypeError, json.JSONDecodeError):
         return fallback
 
 

@@ -73,10 +73,23 @@ APLOS_EXECUTOR_TOKEN=...
 APLOS_REVIEWER_TOKEN=...
 ```
 
+SQLite is the default database. To use TencentDB, Supabase, Neon, or another
+Postgres-compatible database, also set:
+
+```text
+APLOS_DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/ap_learning_os
+```
+
 Start:
 
 ```bash
 docker compose -f docker-compose.tencent.yml up -d --build
+```
+
+Start with bundled Postgres instead of SQLite:
+
+```bash
+docker compose -f docker-compose.postgres.yml up -d --build
 ```
 
 Check:

@@ -25,10 +25,10 @@ CREATE TABLE IF NOT EXISTS plan_compiles (
   schema_version TEXT NOT NULL,
   start_date DATE NOT NULL,
   days INTEGER NOT NULL,
-  courses_json JSONB NOT NULL,
-  rules_json JSONB NOT NULL,
-  source_snapshot_json JSONB NOT NULL,
-  generated_at TIMESTAMPTZ,
+  courses_json TEXT NOT NULL,
+  rules_json TEXT NOT NULL,
+  source_snapshot_json TEXT NOT NULL,
+  generated_at TEXT NOT NULL DEFAULT '',
   imported_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS phase_pools (
   phase TEXT NOT NULL,
   phase_name TEXT NOT NULL DEFAULT '',
   unit TEXT NOT NULL DEFAULT '',
-  runners_json JSONB NOT NULL,
-  resources_json JSONB NOT NULL,
+  runners_json TEXT NOT NULL,
+  resources_json TEXT NOT NULL,
   UNIQUE(plan_compile_id, course, phase)
 );
 
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS plan_rows (
   source_workbook TEXT NOT NULL DEFAULT '',
   source_sheet TEXT NOT NULL DEFAULT '',
   source_row_number INTEGER,
-  source_row_json JSONB NOT NULL,
+  source_row_json TEXT NOT NULL,
   course TEXT NOT NULL,
   unit TEXT NOT NULL DEFAULT '',
   phase TEXT NOT NULL DEFAULT '',
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS plan_rows (
   actual_date DATE,
   topic TEXT NOT NULL DEFAULT '',
   runner_hint TEXT NOT NULL DEFAULT '',
-  resource_hints_json JSONB NOT NULL,
+  resource_hints_json TEXT NOT NULL,
   UNIQUE(plan_compile_id, source_workbook, source_sheet, source_row_number)
 );
 
@@ -92,10 +92,10 @@ CREATE TABLE IF NOT EXISTS material_records (
   page_start INTEGER,
   page_end INTEGER,
   match_method TEXT NOT NULL DEFAULT '',
-  index_json JSONB NOT NULL,
-  upload_required BOOLEAN NOT NULL DEFAULT false,
-  browser_openable BOOLEAN NOT NULL DEFAULT false,
-  missing BOOLEAN NOT NULL DEFAULT false,
+  index_json TEXT NOT NULL,
+  upload_required INTEGER NOT NULL DEFAULT 0,
+  browser_openable INTEGER NOT NULL DEFAULT 0,
+  missing INTEGER NOT NULL DEFAULT 0,
   UNIQUE(plan_compile_id, label, local_target, external_url, page_start, page_end)
 );
 
@@ -113,9 +113,9 @@ CREATE TABLE IF NOT EXISTS task_instances (
   status TEXT NOT NULL DEFAULT 'planned',
   target_minutes INTEGER NOT NULL,
   observable_goal TEXT NOT NULL DEFAULT '',
-  completion_criteria_json JSONB NOT NULL,
-  source_lineage_json JSONB NOT NULL,
-  browser_workflow_json JSONB NOT NULL,
+  completion_criteria_json TEXT NOT NULL,
+  source_lineage_json TEXT NOT NULL,
+  browser_workflow_json TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS evidence_artifacts (
   artifact_type TEXT NOT NULL,
   storage_key TEXT NOT NULL DEFAULT '',
   text_note TEXT NOT NULL DEFAULT '',
-  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS spreadsheet_writebacks (
   target_row INTEGER,
   target_column TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
-  payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  payload_json TEXT NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

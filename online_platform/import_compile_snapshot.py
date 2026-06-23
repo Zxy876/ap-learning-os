@@ -2,12 +2,14 @@
 import argparse
 import hashlib
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 
 BASE = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+POSTGRES_SCHEMA_PATH = Path(__file__).resolve().parent / "schema_postgres.sql"
 
 
 def stable_id(prefix, *parts):
@@ -30,7 +32,49 @@ def load_snapshot(path):
     return data
 
 
-def connect(db_path):
+class PostgresCompatConnection:
+    aplos_driver = "postgres"
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, query, params=None):
+        query = query.replace("?", "%s")
+        return self._conn.execute(query, params or ())
+
+    def commit(self):
+        return self._conn.commit()
+
+    def close(self):
+        return self._conn.close()
+
+
+def is_postgres(conn):
+    return getattr(conn, "aplos_driver", "") == "postgres"
+
+
+def bind_marker(conn):
+    return "%s" if is_postgres(conn) else "?"
+
+
+def connect_postgres(database_url):
+    try:
+        import psycopg
+        from psycopg.rows import dict_row
+    except ImportError as exc:
+        raise SystemExit("psycopg[binary] is required for APLOS_DATABASE_URL Postgres connections.") from exc
+    raw_conn = psycopg.connect(database_url, row_factory=dict_row)
+    raw_conn.execute(POSTGRES_SCHEMA_PATH.read_text(encoding="utf-8"))
+    raw_conn.commit()
+    return PostgresCompatConnection(raw_conn)
+
+
+def connect(db_path=None):
+    database_url = os.getenv("APLOS_DATABASE_URL", "")
+    if database_url.startswith(("postgresql://", "postgres://")):
+        return connect_postgres(database_url)
+    if not db_path:
+        db_path = str(BASE / "data" / "online_platform" / "aplos_dev.sqlite3")
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False)
@@ -42,6 +86,8 @@ def connect(db_path):
 
 
 def migrate(conn):
+    if is_postgres(conn):
+        return
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(material_records)").fetchall()}
     if "storage_key" not in columns:
         conn.execute("ALTER TABLE material_records ADD COLUMN storage_key TEXT NOT NULL DEFAULT ''")
@@ -52,7 +98,8 @@ def migrate(conn):
 
 def upsert(conn, table, values):
     columns = list(values.keys())
-    placeholders = ", ".join("?" for _ in columns)
+    marker = bind_marker(conn)
+    placeholders = ", ".join(marker for _ in columns)
     assignments = ", ".join(f"{column}=excluded.{column}" for column in columns if column != "id")
     sql = (
         f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders}) "
@@ -63,6 +110,8 @@ def upsert(conn, table, values):
 
 def one(conn, query, params=()):
     row = conn.execute(query, params).fetchone()
+    if isinstance(row, dict):
+        return next(iter(row.values())) if row else None
     return row[0] if row else None
 
 

@@ -69,6 +69,7 @@ Deployment files:
 
 - `Dockerfile`
 - `docker-compose.tencent.yml`
+- `docker-compose.postgres.yml`
 - `.env.production.example`
 
 ## State Machine
