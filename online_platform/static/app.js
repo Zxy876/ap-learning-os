@@ -21,9 +21,7 @@ function setActive(route) {
 }
 
 async function api(path, options = {}) {
-  const token = localStorage.getItem(`aplos_token_${routeName()}`) || localStorage.getItem("aplos_token") || "";
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${basePath()}${path}`, {
     headers,
     ...options,
@@ -56,13 +54,18 @@ function renderError(error) {
 
 function renderRouteError(route, error) {
   app.replaceChildren(
-    tokenControls(route),
     el("div", { class: "error", text: error.message || String(error) }),
   );
 }
 
 function statusPill(status) {
-  const cls = status === "completed" ? "pill good" : status === "failed" || status === "not_completed" ? "pill bad" : "pill";
+  const cls = ["completed", "active"].includes(status)
+    ? "pill good"
+    : ["failed", "not_completed", "archived"].includes(status)
+      ? "pill bad"
+      : status === "sandbox"
+        ? "pill warn"
+        : "pill";
   return el("span", { class: cls, text: status || "planned" });
 }
 
@@ -77,30 +80,6 @@ function fileToDataUrl(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
-}
-
-function tokenControls(route) {
-  const input = el("input", {
-    type: "password",
-    placeholder: `${route} token`,
-    value: localStorage.getItem(`aplos_token_${route}`) || "",
-  });
-  const save = el("button", { text: "Save Token" });
-  save.addEventListener("click", () => {
-    localStorage.setItem(`aplos_token_${route}`, input.value.trim());
-    save.textContent = "Saved";
-    setTimeout(() => { save.textContent = "Save Token"; }, 1200);
-  });
-  const clear = el("button", { text: "Clear" });
-  clear.addEventListener("click", () => {
-    localStorage.removeItem(`aplos_token_${route}`);
-    input.value = "";
-  });
-  return el("div", { class: "tokenbar" }, [
-    el("label", { text: "Role token" }, [input]),
-    save,
-    clear,
-  ]);
 }
 
 async function renderWorkspace() {
@@ -122,7 +101,6 @@ async function renderWorkspace() {
   const button = el("button", { class: "primary", text: "Load" });
   button.addEventListener("click", () => load().catch(renderError));
   app.replaceChildren(
-    tokenControls("workspace"),
     el("div", { class: "toolbar" }, [el("label", { text: "Date" }, [dateInput]), button]),
     el("div", { class: "grid" }, [list, detail]),
   );
@@ -216,6 +194,68 @@ function evidenceBlock(item) {
   ]);
 }
 
+function materialPreviewLine(material) {
+  const url = material.browser_url || material.external_url;
+  const target = url || material.local_target || material.label || "unpublished";
+  const pageText = material.page_start ? ` · pages ${material.page_start}-${material.page_end || material.page_start}` : "";
+  const state = material.missing
+    ? "missing"
+    : material.browser_openable || url
+      ? "openable"
+      : "indexed";
+  return el("li", {}, [
+    el("strong", { text: `${material.role}: ` }),
+    url
+      ? el("a", { href: url, target: "_blank", rel: "noreferrer", text: target })
+      : el("span", { text: target }),
+    el("span", { class: material.missing ? "inline-bad" : "muted", text: `${pageText} · ${state}` }),
+  ]);
+}
+
+function authorTaskPreviewCard(task) {
+  const materials = task.materials && task.materials.length
+    ? el("ul", { class: "compact-list" }, task.materials.map(materialPreviewLine))
+    : el("p", { class: "muted", text: "No material is attached to this task." });
+  return el("article", { class: "preview-task" }, [
+    el("h4", { text: task.title }),
+    el("div", { class: "meta" }, [
+      statusPill(task.status),
+      el("span", { class: "pill", text: task.course }),
+      el("span", { class: "pill", text: `${task.target_minutes} min` }),
+    ]),
+    el("p", { text: task.observable_goal }),
+    materials,
+  ]);
+}
+
+function authorWorkspacePreview(compile) {
+  const dateInput = el("input", { type: "date", value: compile.start_date || todayIso() });
+  const preview = el("div", { class: "preview-box" }, [
+    el("p", { class: "muted", text: "Choose a date to see exactly what the executor workspace would show for this sandbox." }),
+  ]);
+  const load = el("button", { text: "Preview B Workspace" });
+  const loadPreview = async () => {
+    preview.replaceChildren(el("p", { class: "muted", text: "Loading preview..." }));
+    const data = await api(`/api/author/compiles/${compile.id}/preview?date=${dateInput.value}`);
+    if (!data.tasks.length) {
+      preview.replaceChildren(el("p", { class: "muted", text: "No executor tasks generated for this date." }));
+      return;
+    }
+    preview.replaceChildren(...data.tasks.map(authorTaskPreviewCard));
+  };
+  load.addEventListener("click", () => loadPreview().catch((error) => {
+    preview.replaceChildren(el("div", { class: "error", text: error.message || String(error) }));
+  }));
+  return el("details", { class: "sandbox-preview" }, [
+    el("summary", { text: "B Workspace Preview" }),
+    el("div", { class: "toolbar" }, [
+      el("label", { text: "Preview Date" }, [dateInput]),
+      load,
+    ]),
+    preview,
+  ]);
+}
+
 async function renderReview() {
   setActive("review");
   subtitle.textContent = "Supervisor review queue";
@@ -230,7 +270,7 @@ async function renderReview() {
     }
     data.review_requests.forEach((request) => list.append(reviewCard(request, detail, load)));
   };
-  app.replaceChildren(tokenControls("review"), el("div", { class: "grid" }, [list, detail]));
+  app.replaceChildren(el("div", { class: "grid" }, [list, detail]));
   await load();
 }
 
@@ -280,7 +320,7 @@ function renderReviewDetail(request, task, detail, reload) {
 
 async function renderAuthor() {
   setActive("author");
-  subtitle.textContent = "Author sandbox summary";
+  subtitle.textContent = "Author sandbox: compile plans, preview executor tasks, then publish";
   const compileStart = el("input", { type: "date", value: todayIso() });
   const compileDays = el("input", { type: "number", min: "1", max: "370", value: "30" });
   const planFiles = el("input", { type: "file", accept: ".xlsx,.xlsm", multiple: "multiple" });
@@ -311,13 +351,15 @@ async function renderAuthor() {
           base_url: `${window.location.origin}${basePath()}`,
         }),
       });
-      compileResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh compile summaries.`;
+      compileResult.textContent = `${JSON.stringify(result, null, 2)}\n\nSandbox created. Publish it only after preview looks right.`;
+      await renderAuthor();
     } catch (error) {
       compileResult.textContent = `Error: ${error.message || String(error)}`;
     }
   });
   const tools = el("section", { class: "record" }, [
     el("h2", { text: "Compile From Excel Plans" }),
+    el("p", { class: "muted", text: "Upload one or more plan spreadsheets and one optional resource ZIP. The result stays in sandbox until you publish it." }),
     el("div", { class: "toolbar" }, [
       el("label", { text: "Start Date" }, [compileStart]),
       el("label", { text: "Days" }, [compileDays]),
@@ -330,9 +372,21 @@ async function renderAuthor() {
   const data = await api("/api/author/compiles");
   const list = el("section", { class: "list" });
   if (!data.compiles.length) {
-    list.append(el("section", { class: "empty" }, [el("h2", { text: "No compiles" }), el("p", { text: "Import a compile snapshot first." })]));
+    list.append(el("section", { class: "empty" }, [el("h2", { text: "No sandboxes" }), el("p", { text: "Upload one plan Excel and an optional resource ZIP to compile a sandbox." })]));
   }
   data.compiles.forEach((compile) => {
+    const publish = el("button", { class: compile.status === "active" ? "" : "primary", text: compile.status === "active" ? "Already Active" : "Publish to Workspace" });
+    publish.disabled = compile.status === "active";
+    publish.addEventListener("click", async () => {
+      publish.textContent = "Publishing...";
+      await api(`/api/author/compiles/${compile.id}/publish`, { method: "POST", body: JSON.stringify({}) });
+      await renderAuthor();
+    });
+    const meaning = compile.status === "sandbox"
+      ? "Sandbox only: visible here for checking, not used by the executor workspace."
+      : compile.status === "active"
+        ? "Active: executor workspace uses this compile for matching courses."
+        : "Archived: kept for history, not used by the executor workspace.";
     list.append(el("article", { class: "record" }, [
       el("h3", { text: compile.compile_id }),
       el("div", { class: "meta" }, [
@@ -343,9 +397,12 @@ async function renderAuthor() {
         el("span", { class: "pill", text: `${compile.published_materials}/${compile.material_records} materials published` }),
       ]),
       el("p", { text: `Start ${compile.start_date}, ${compile.days} days, courses ${compile.courses.join(", ")}` }),
+      el("p", { class: "muted", text: meaning }),
+      el("div", { class: "actions" }, [publish]),
+      authorWorkspacePreview(compile),
     ]));
   });
-  app.replaceChildren(tokenControls("author"), tools, list);
+  app.replaceChildren(tools, list);
 }
 
 async function boot() {
