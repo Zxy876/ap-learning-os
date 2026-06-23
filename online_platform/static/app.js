@@ -281,6 +281,40 @@ function renderReviewDetail(request, task, detail, reload) {
 async function renderAuthor() {
   setActive("author");
   subtitle.textContent = "Author sandbox summary";
+  const compileStart = el("input", { type: "date", value: todayIso() });
+  const compileDays = el("input", { type: "number", min: "1", max: "370", value: "30" });
+  const bcPlanFile = el("input", { type: "file", accept: ".xlsx,.xlsm" });
+  const csaPlanFile = el("input", { type: "file", accept: ".xlsx,.xlsm" });
+  const resourceZipFile = el("input", { type: "file", accept: ".zip" });
+  const compileResult = el("pre", { class: "result", text: "" });
+  const compileButton = el("button", { class: "primary", text: "Compile + Import From Excel Plans" });
+  compileButton.addEventListener("click", async () => {
+    const bcFile = bcPlanFile.files && bcPlanFile.files[0];
+    const csaFile = csaPlanFile.files && csaPlanFile.files[0];
+    const zipFile = resourceZipFile.files && resourceZipFile.files[0];
+    if (!bcFile || !csaFile) throw new Error("Choose both BC and CSA plan Excel files.");
+    const toPayload = async (file) => ({
+      filename: file.name,
+      content_type: file.type,
+      data_base64: await fileToDataUrl(file),
+    });
+    compileResult.textContent = "Compiling on server...";
+    const result = await api("/api/author/compile-from-plans", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: orgId.value,
+        organization_name: orgName.value,
+        start_date: compileStart.value,
+        days: Number(compileDays.value || 30),
+        bc_plan_file: await toPayload(bcFile),
+        csa_plan_file: await toPayload(csaFile),
+        resource_zip_file: zipFile ? await toPayload(zipFile) : null,
+        publish_materials: true,
+        base_url: `${window.location.origin}${basePath()}`,
+      }),
+    });
+    compileResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh compile summaries.`;
+  });
   const snapshotText = el("textarea", { placeholder: "Paste compile snapshot JSON here." });
   const snapshotFile = el("input", { type: "file", accept: "application/json,.json" });
   snapshotFile.addEventListener("change", async () => {
@@ -321,6 +355,16 @@ async function renderAuthor() {
     publishResult.textContent = `${JSON.stringify(result, null, 2)}\n\nReload the page to refresh material counts.`;
   });
   const tools = el("section", { class: "record" }, [
+    el("h2", { text: "Compile From Excel Plans" }),
+    el("div", { class: "toolbar" }, [
+      el("label", { text: "Start Date" }, [compileStart]),
+      el("label", { text: "Days" }, [compileDays]),
+      el("label", { text: "BC Plan Excel" }, [bcPlanFile]),
+      el("label", { text: "CSA Plan Excel" }, [csaPlanFile]),
+      el("label", { text: "Resource ZIP optional" }, [resourceZipFile]),
+    ]),
+    el("div", { class: "actions" }, [compileButton]),
+    compileResult,
     el("h2", { text: "Import Compile Snapshot" }),
     el("div", { class: "toolbar" }, [
       el("label", { text: "Organization ID" }, [orgId]),

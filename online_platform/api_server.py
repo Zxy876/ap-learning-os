@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import copy
 import datetime as dt
 import json
 import mimetypes
 import os
 import re
+import sys
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+BASE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BASE))
+
 from import_compile_snapshot import connect, dumps, import_snapshot, stable_id, summary
+from learning_os import RESOURCE_RESOLUTION_CACHE, compile_snapshot, load_config
 from process_writebacks import process_writebacks
 from publish_materials import publish_materials
 from storage_adapters import LocalStorageAdapter, S3CompatibleStorageAdapter
 
 
-BASE = Path(__file__).resolve().parents[1]
 DEFAULT_STORAGE_ROOT = BASE / "data" / "online_platform" / "storage"
+DEFAULT_UPLOAD_ROOT = BASE / "uploads"
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
 
@@ -149,6 +156,49 @@ def storage_path(storage_root, storage_key):
 def safe_filename(name):
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", name or "evidence.bin").strip(".-")
     return cleaned or "evidence.bin"
+
+
+def decode_upload_file(file_payload, required=False):
+    if not file_payload:
+        if required:
+            raise ValueError("required file is missing")
+        return None
+    raw = file_payload.get("data_base64") or ""
+    if "," in raw and raw.split(",", 1)[0].startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except Exception as exc:
+        raise ValueError(f"{file_payload.get('filename') or 'uploaded file'} is not valid base64") from exc
+    max_bytes = int(os.getenv("APLOS_MAX_AUTHOR_UPLOAD_BYTES", str(100 * 1024 * 1024)))
+    if len(data) > max_bytes:
+        raise ValueError(f"uploaded file is too large; max {max_bytes} bytes")
+    return {
+        "filename": safe_filename(file_payload.get("filename") or "upload.bin"),
+        "content_type": file_payload.get("content_type") or "",
+        "data": data,
+    }
+
+
+def safe_extract_zip(zip_path, output_dir):
+    extracted = 0
+    with zipfile.ZipFile(zip_path) as zf:
+        for member in zf.infolist():
+            if member.is_dir():
+                continue
+            member_path = Path(member.filename)
+            if member_path.is_absolute() or ".." in member_path.parts:
+                continue
+            target = (output_dir / member_path).resolve()
+            try:
+                target.relative_to(output_dir.resolve())
+            except ValueError:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member) as source, target.open("wb") as dest:
+                dest.write(source.read())
+            extracted += 1
+    return extracted
 
 
 def review_queue(conn):
@@ -298,6 +348,63 @@ def create_review_request(conn, task_id):
     conn.execute("UPDATE task_instances SET status = 'needs_review' WHERE id = ?", (task_id,))
     conn.commit()
     return row_to_dict(conn.execute("SELECT * FROM review_requests WHERE id = ?", (request_id,)).fetchone())
+
+
+def compile_from_uploaded_plans(conn, storage_root, payload):
+    bc_file = decode_upload_file(payload.get("bc_plan_file"), required=True)
+    csa_file = decode_upload_file(payload.get("csa_plan_file"), required=True)
+    resource_zip = decode_upload_file(payload.get("resource_zip_file"), required=False)
+
+    start = dt.date.fromisoformat(payload.get("start_date") or dt.date.today().isoformat())
+    days = int(payload.get("days") or 30)
+    if days < 1 or days > 370:
+        raise ValueError("days must be between 1 and 370")
+
+    upload_id = stable_id("authorupload", start.isoformat(), days, bc_file["filename"], csa_file["filename"], dt.datetime.now().isoformat())
+    upload_root = Path(os.getenv("APLOS_UPLOAD_ROOT", str(DEFAULT_UPLOAD_ROOT))) / "author" / upload_id
+    plans_dir = upload_root / "plans"
+    resources_dir = upload_root / "resources"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    resources_dir.mkdir(parents=True, exist_ok=True)
+
+    bc_path = plans_dir / bc_file["filename"]
+    csa_path = plans_dir / csa_file["filename"]
+    bc_path.write_bytes(bc_file["data"])
+    csa_path.write_bytes(csa_file["data"])
+
+    extracted_files = 0
+    if resource_zip:
+        zip_path = upload_root / resource_zip["filename"]
+        zip_path.write_bytes(resource_zip["data"])
+        extracted_files = safe_extract_zip(zip_path, resources_dir)
+
+    config = copy.deepcopy(load_config())
+    config["workspace_root"] = str(resources_dir)
+    config.setdefault("plans", {})
+    config["plans"]["AP_Calculus_BC"] = str(bc_path)
+    config["plans"]["AP_CSA"] = str(csa_path)
+    RESOURCE_RESOLUTION_CACHE.clear()
+    snapshot = compile_snapshot(config, start, days, course=payload.get("course") or None, include_materials=True)
+
+    snapshot_path = upload_root / f"compile_snapshot_{snapshot['compile_id']}.json"
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    plan_compile_id = import_snapshot(
+        conn,
+        snapshot,
+        payload.get("organization_id") or "org_uploaded_ap_learning_os",
+        payload.get("organization_name") or "Uploaded AP Learning OS",
+    )
+    public_base_url = payload.get("base_url") or os.getenv("APLOS_PUBLIC_BASE_URL", "")
+    publish_result = publish_materials(conn, LocalStorageAdapter(storage_root, public_base_url)) if payload.get("publish_materials", True) else None
+    result = summary(conn, plan_compile_id)
+    result.update({
+        "upload_id": upload_id,
+        "snapshot_path": str(snapshot_path),
+        "resource_zip_extracted_files": extracted_files,
+        "publish_result": publish_result,
+    })
+    return result
 
 
 def decide_review(conn, review_request_id, payload):
@@ -630,6 +737,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                 else:
                     raise ValueError("backend must be local or s3")
                 self.send_json(200, publish_materials(self.conn, adapter))
+                return
+            if path == "/api/author/compile-from-plans":
+                if not self.require_role("author"):
+                    return
+                self.send_json(201, compile_from_uploaded_plans(self.conn, self.server.storage_root, payload))
                 return
             if path == "/api/writebacks/run":
                 if not self.require_role("author"):

@@ -120,6 +120,29 @@ http://SERVER_PUBLIC_IP/aplos/review
 In that mode, publish local materials with base URL
 `http://SERVER_PUBLIC_IP/aplos` so file URLs become `/aplos/files/...`.
 
+## Browser Plan Upload
+
+The Author page can compile directly from uploaded Excel plans:
+
+1. Open `/aplos/author`.
+2. Save the author token.
+3. In `Compile From Excel Plans`, choose the BC plan Excel file and CSA plan
+   Excel file.
+4. Optionally upload a ZIP of resource PDFs. The compiler searches extracted
+   resource filenames when matching the plan's resource index.
+5. Click `Compile + Import From Excel Plans`.
+
+Server-side upload defaults:
+
+```text
+APLOS_UPLOAD_ROOT=/app/uploads
+APLOS_MAX_AUTHOR_UPLOAD_BYTES=104857600
+```
+
+If nginx is in front of AP Learning OS, its `client_max_body_size` must be at
+least as large as the uploaded JSON payload. Base64 adds roughly 33% overhead,
+so a 50 MB ZIP needs a limit above 67 MB.
+
 Executor evidence uploads are stored under `APLOS_STORAGE_ROOT/evidence`.
 The default upload limit is 20 MB. Override it with:
 
