@@ -51,6 +51,14 @@ def row_to_dict(row):
     return {key: row[key] for key in row.keys()}
 
 
+def scalar(row, fallback=0):
+    if row is None:
+        return fallback
+    if isinstance(row, dict):
+        return next(iter(row.values()), fallback)
+    return row[0]
+
+
 def json_loads(value, fallback):
     if isinstance(value, (dict, list)):
         return value
@@ -83,14 +91,14 @@ def task_payload(conn, task_id, include_materials=True):
     task["completion_criteria"] = json_loads(task.pop("completion_criteria_json"), [])
     task["source_lineage"] = json_loads(task.pop("source_lineage_json"), {})
     task["browser_workflow"] = json_loads(task.pop("browser_workflow_json"), [])
-    task["evidence_count"] = conn.execute(
+    task["evidence_count"] = scalar(conn.execute(
         "SELECT COUNT(*) FROM evidence_artifacts WHERE task_instance_id = ?",
         (task_id,),
-    ).fetchone()[0]
-    task["open_review_request_count"] = conn.execute(
+    ).fetchone())
+    task["open_review_request_count"] = scalar(conn.execute(
         "SELECT COUNT(*) FROM review_requests WHERE task_instance_id = ? AND status = 'open'",
         (task_id,),
-    ).fetchone()[0]
+    ).fetchone())
     if include_materials:
         material_rows = conn.execute(
             """
@@ -169,12 +177,12 @@ def compile_summaries(conn):
         payload["courses"] = json_loads(payload.pop("courses_json"), [])
         payload["rules"] = json_loads(payload.pop("rules_json"), {})
         payload.pop("source_snapshot_json", None)
-        payload["phase_pools"] = conn.execute("SELECT COUNT(*) FROM phase_pools WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
-        payload["plan_steps"] = conn.execute("SELECT COUNT(*) FROM plan_steps WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
-        payload["task_instances"] = conn.execute("SELECT COUNT(*) FROM task_instances WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
-        payload["material_records"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
-        payload["published_materials"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND browser_url != ''", (row["id"],)).fetchone()[0]
-        payload["missing_materials"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone()[0]
+        payload["phase_pools"] = scalar(conn.execute("SELECT COUNT(*) FROM phase_pools WHERE plan_compile_id = ?", (row["id"],)).fetchone())
+        payload["plan_steps"] = scalar(conn.execute("SELECT COUNT(*) FROM plan_steps WHERE plan_compile_id = ?", (row["id"],)).fetchone())
+        payload["task_instances"] = scalar(conn.execute("SELECT COUNT(*) FROM task_instances WHERE plan_compile_id = ?", (row["id"],)).fetchone())
+        payload["material_records"] = scalar(conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ?", (row["id"],)).fetchone())
+        payload["published_materials"] = scalar(conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND browser_url != ''", (row["id"],)).fetchone())
+        payload["missing_materials"] = scalar(conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone())
         summaries.append(payload)
     return summaries
 
@@ -543,9 +551,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"error": "compile not found"})
                     return
                 payload = row_to_dict(row)
-                payload["task_instances"] = self.conn.execute("SELECT COUNT(*) FROM task_instances WHERE plan_compile_id = ?", (row["id"],)).fetchone()[0]
-                payload["upload_required_materials"] = self.conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND upload_required = 1", (row["id"],)).fetchone()[0]
-                payload["missing_materials"] = self.conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone()[0]
+                payload["task_instances"] = scalar(self.conn.execute("SELECT COUNT(*) FROM task_instances WHERE plan_compile_id = ?", (row["id"],)).fetchone())
+                payload["upload_required_materials"] = scalar(self.conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND upload_required = 1", (row["id"],)).fetchone())
+                payload["missing_materials"] = scalar(self.conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone())
                 self.send_json(200, payload)
                 return
             if path == "/api/writebacks":

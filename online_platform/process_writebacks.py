@@ -23,10 +23,20 @@ WRITEBACK_HEADERS = {
 
 
 def load_json(value, fallback):
+    if isinstance(value, (dict, list)):
+        return value
     try:
         return json.loads(value) if value else fallback
-    except json.JSONDecodeError:
+    except (TypeError, json.JSONDecodeError):
         return fallback
+
+
+def scalar(row, fallback=0):
+    if row is None:
+        return fallback
+    if isinstance(row, dict):
+        return next(iter(row.values()), fallback)
+    return row[0]
 
 
 def ensure_header(ws, header, header_row=3):
@@ -126,7 +136,7 @@ def process_writebacks(conn, output_dir=DEFAULT_OUTPUT_DIR, in_place=False):
         result["workbooks"].append(apply_rows_to_workbook(conn, source_path, group, output_dir, in_place))
     conn.commit()
     result["written"] = sum(item.get("rows", 0) for item in result["workbooks"] if item.get("status") == "written")
-    result["failed"] = conn.execute("SELECT COUNT(*) FROM spreadsheet_writebacks WHERE status = 'failed'").fetchone()[0]
+    result["failed"] = scalar(conn.execute("SELECT COUNT(*) FROM spreadsheet_writebacks WHERE status = 'failed'").fetchone())
     return result
 
 
