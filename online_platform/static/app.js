@@ -1,8 +1,16 @@
 const app = document.querySelector("#app");
 const subtitle = document.querySelector("#subtitle");
 
+function basePath() {
+  const path = window.location.pathname;
+  if (path === "/aplos" || path.startsWith("/aplos/")) return "/aplos";
+  return "";
+}
+
 function routeName() {
-  const path = window.location.pathname.replace("/", "");
+  const base = basePath();
+  const raw = base ? window.location.pathname.slice(base.length) || "/" : window.location.pathname;
+  const path = raw.replace("/", "");
   return path || "workspace";
 }
 
@@ -16,7 +24,7 @@ async function api(path, options = {}) {
   const token = localStorage.getItem(`aplos_token_${routeName()}`) || localStorage.getItem("aplos_token") || "";
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(path, {
+  const response = await fetch(`${basePath()}${path}`, {
     headers,
     ...options,
   });
@@ -102,7 +110,7 @@ async function renderWorkspace() {
       list.append(el("section", { class: "empty" }, [el("h2", { text: "No tasks" }), el("p", { text: "No task instances for this date." })]));
       return;
     }
-    data.tasks.forEach((task) => list.append(taskCard(task, detail)));
+  data.tasks.forEach((task) => list.append(taskCard(task, detail)));
   };
   const button = el("button", { class: "primary", text: "Load" });
   button.addEventListener("click", () => load().catch(renderError));
@@ -197,7 +205,7 @@ function evidenceBlock(item) {
   return el("div", { class: "material" }, [
     el("strong", { text: item.artifact_type }),
     item.text_note ? el("p", { text: item.text_note }) : null,
-    item.storage_key ? el("a", { href: `/files/${item.storage_key}`, target: "_blank", rel: "noreferrer", text: item.storage_key }) : null,
+    item.storage_key ? el("a", { href: `${basePath()}/files/${item.storage_key}`, target: "_blank", rel: "noreferrer", text: item.storage_key }) : null,
   ]);
 }
 
