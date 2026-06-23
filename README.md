@@ -49,12 +49,14 @@ Design docs:
 - `docs/online_platform_infra_checklist.md`
 - `docs/compile_snapshot_contract.md`
 - `docs/local_online_api_smoke.md`
+- `docs/material_publication_contract.md`
 
 First online data-layer harness:
 
 - `online_platform/schema.sql`
 - `online_platform/import_compile_snapshot.py`
 - `online_platform/api_server.py`
+- `online_platform/publish_materials.py`
 
 ## State Machine
 

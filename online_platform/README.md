@@ -26,6 +26,14 @@ python3 online_platform/import_compile_snapshot.py \
   --db data/online_platform/aplos_dev.sqlite3
 ```
 
+Publish local material files into browser-addressable local storage:
+
+```bash
+python3 online_platform/publish_materials.py \
+  --db data/online_platform/aplos_dev.sqlite3 \
+  --base-url http://127.0.0.1:8776
+```
+
 Inspect summary:
 
 ```bash
@@ -48,6 +56,12 @@ Example API calls:
 ```bash
 curl "http://127.0.0.1:8776/api/workspace/today?date=2026-06-22"
 curl "http://127.0.0.1:8776/api/review/queue"
+```
+
+Open a published material through the API:
+
+```bash
+curl -I "http://127.0.0.1:8776/files/materials/xx/file.pdf"
 ```
 
 Create evidence for a task:
@@ -78,9 +92,10 @@ curl -X POST "http://127.0.0.1:8776/api/review/requests/REVIEW_ID/decision" \
 - material records
 - task instances
 
-Local files are not uploaded here. They are recorded as `upload_required`
-materials. The hosted version must upload them to object storage and replace
-local paths with storage keys.
+Local files are not uploaded to cloud storage here. They are recorded as
+`upload_required` materials, then `publish_materials.py` can copy them into a
+local storage folder and give them browser URLs. The hosted version must replace
+this local storage folder with S3/R2/Supabase Storage or another object store.
 
 ## Why SQLite First
 

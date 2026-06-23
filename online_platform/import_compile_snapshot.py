@@ -37,7 +37,17 @@ def connect(db_path):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+    migrate(conn)
     return conn
+
+
+def migrate(conn):
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(material_records)").fetchall()}
+    if "storage_key" not in columns:
+        conn.execute("ALTER TABLE material_records ADD COLUMN storage_key TEXT NOT NULL DEFAULT ''")
+    if "browser_url" not in columns:
+        conn.execute("ALTER TABLE material_records ADD COLUMN browser_url TEXT NOT NULL DEFAULT ''")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_material_storage_key ON material_records(storage_key)")
 
 
 def upsert(conn, table, values):
@@ -216,6 +226,8 @@ def import_snapshot(conn, snapshot, organization_id, organization_name):
                     "local_target": material.get("local_target") or "",
                     "external_url": material.get("external_url") or "",
                     "source_local_path": material.get("source_local_path") or "",
+                    "storage_key": "",
+                    "browser_url": material.get("external_url") or "",
                     "page_start": page_range[0],
                     "page_end": page_range[1],
                     "match_method": material.get("match") or "",

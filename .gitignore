@@ -8,6 +8,7 @@ data/*.json
 data/**/*.json
 data/**/*.sqlite3
 data/**/*.db
+data/online_platform/
 logs/*.log
 sessions/*
 task_materials/*

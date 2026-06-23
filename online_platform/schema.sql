@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS material_records (
   local_target TEXT NOT NULL DEFAULT '',
   external_url TEXT NOT NULL DEFAULT '',
   source_local_path TEXT NOT NULL DEFAULT '',
+  storage_key TEXT NOT NULL DEFAULT '',
+  browser_url TEXT NOT NULL DEFAULT '',
   page_start INTEGER,
   page_end INTEGER,
   match_method TEXT NOT NULL DEFAULT '',
@@ -177,3 +179,4 @@ CREATE INDEX IF NOT EXISTS idx_task_instances_date ON task_instances(scheduled_d
 CREATE INDEX IF NOT EXISTS idx_task_instances_status ON task_instances(status);
 CREATE INDEX IF NOT EXISTS idx_plan_rows_source ON plan_rows(source_sheet, source_row_number);
 CREATE INDEX IF NOT EXISTS idx_material_upload_required ON material_records(upload_required);
+CREATE INDEX IF NOT EXISTS idx_material_storage_key ON material_records(storage_key);

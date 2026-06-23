@@ -2,6 +2,7 @@
 import argparse
 import datetime as dt
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -10,6 +11,7 @@ from import_compile_snapshot import connect, dumps, stable_id
 
 
 BASE = Path(__file__).resolve().parents[1]
+DEFAULT_STORAGE_ROOT = BASE / "data" / "online_platform" / "storage"
 
 
 FINAL_STATES = {"completed", "partial", "not_completed", "failed", "blocked"}
@@ -100,6 +102,17 @@ def material_payload(row):
     for key in ["upload_required", "browser_openable", "missing"]:
         data[key] = bool(data[key])
     return data
+
+
+def storage_path(storage_root, storage_key):
+    if not storage_key or ".." in storage_key:
+        return None
+    path = (storage_root / storage_key).resolve()
+    try:
+        path.relative_to(storage_root.resolve())
+    except ValueError:
+        return None
+    return path
 
 
 def review_queue(conn):
@@ -291,8 +304,32 @@ class ApiHandler(BaseHTTPRequestHandler):
     def conn(self):
         return self.server.conn
 
+    def send_file(self, storage_key, include_body=True):
+        file_path = storage_path(self.server.storage_root, storage_key)
+        if not file_path or not file_path.exists() or not file_path.is_file():
+            self.send_json(404, {"error": "file not found"})
+            return
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        data = file_path.read_bytes() if include_body else b""
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(file_path.stat().st_size))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        if include_body:
+            self.wfile.write(data)
+
     def do_OPTIONS(self):
         self.send_json(200, {"ok": True})
+
+    def do_HEAD(self):
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        if path.startswith("/files/"):
+            self.send_file(path.removeprefix("/files/").lstrip("/"), include_body=False)
+            return
+        self.send_response(404)
+        self.end_headers()
 
     def do_GET(self):
         try:
@@ -313,6 +350,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"error": "task not found"})
                     return
                 self.send_json(200, task)
+                return
+            if path.startswith("/files/"):
+                self.send_file(path.removeprefix("/files/").lstrip("/"))
                 return
             if path == "/api/review/queue":
                 self.send_json(200, {"review_requests": review_queue(self.conn)})
@@ -363,9 +403,10 @@ class ApiHandler(BaseHTTPRequestHandler):
 
 
 class ApiServer(ThreadingHTTPServer):
-    def __init__(self, server_address, handler_class, db_path):
+    def __init__(self, server_address, handler_class, db_path, storage_root):
         super().__init__(server_address, handler_class)
         self.conn = connect(db_path)
+        self.storage_root = Path(storage_root)
 
 
 def main():
@@ -373,8 +414,9 @@ def main():
     parser.add_argument("--db", default=str(BASE / "data" / "online_platform" / "aplos_dev.sqlite3"))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8776)
+    parser.add_argument("--storage-root", default=str(DEFAULT_STORAGE_ROOT))
     args = parser.parse_args()
-    server = ApiServer((args.host, args.port), ApiHandler, args.db)
+    server = ApiServer((args.host, args.port), ApiHandler, args.db, args.storage_root)
     print(f"AP Learning OS API listening on http://{args.host}:{args.port}")
     try:
         server.serve_forever()
@@ -386,4 +428,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
