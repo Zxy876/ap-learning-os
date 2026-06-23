@@ -54,6 +54,13 @@ function renderError(error) {
   app.prepend(el("div", { class: "error", text: error.message || String(error) }));
 }
 
+function renderRouteError(route, error) {
+  app.replaceChildren(
+    tokenControls(route),
+    el("div", { class: "error", text: error.message || String(error) }),
+  );
+}
+
 function statusPill(status) {
   const cls = status === "completed" ? "pill good" : status === "failed" || status === "not_completed" ? "pill bad" : "pill";
   return el("span", { class: cls, text: status || "planned" });
@@ -350,13 +357,13 @@ async function renderAuthor() {
 }
 
 async function boot() {
+  const route = routeName();
   try {
-    const route = routeName();
     if (route === "review") await renderReview();
     else if (route === "author") await renderAuthor();
     else await renderWorkspace();
   } catch (error) {
-    renderError(error);
+    renderRouteError(route, error);
   }
 }
 
