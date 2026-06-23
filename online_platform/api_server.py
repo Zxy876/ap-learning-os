@@ -3,11 +3,13 @@ import argparse
 import datetime as dt
 import json
 import mimetypes
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from import_compile_snapshot import connect, dumps, stable_id
+from process_writebacks import process_writebacks
 
 
 BASE = Path(__file__).resolve().parents[1]
@@ -28,6 +30,12 @@ FAILURE_TYPES = {
     "technical_blocked",
     "external_blocked",
     "other",
+}
+
+ROLE_TOKENS = {
+    "author": "APLOS_AUTHOR_TOKEN",
+    "executor": "APLOS_EXECUTOR_TOKEN",
+    "reviewer": "APLOS_REVIEWER_TOKEN",
 }
 
 
@@ -156,6 +164,24 @@ def compile_summaries(conn):
         payload["missing_materials"] = conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone()[0]
         summaries.append(payload)
     return summaries
+
+
+def writeback_queue(conn):
+    rows = conn.execute(
+        """
+        SELECT sw.id, sw.status, sw.target_sheet, sw.target_row, sw.target_column,
+               sw.created_at, sw.payload_json, pr.source_workbook
+        FROM spreadsheet_writebacks sw
+        LEFT JOIN plan_rows pr ON pr.id = sw.plan_row_id
+        ORDER BY sw.created_at DESC
+        """
+    ).fetchall()
+    out = []
+    for row in rows:
+        item = row_to_dict(row)
+        item["payload"] = json_loads(item.pop("payload_json"), {})
+        out.append(item)
+    return out
 
 
 def add_evidence(conn, task_id, payload):
@@ -329,6 +355,30 @@ class ApiHandler(BaseHTTPRequestHandler):
     def conn(self):
         return self.server.conn
 
+    def require_role(self, role):
+        token_name = ROLE_TOKENS[role]
+        expected = os.getenv(token_name)
+        if not expected:
+            return True
+        auth = self.headers.get("Authorization", "")
+        supplied = auth.removeprefix("Bearer ").strip()
+        if supplied == expected:
+            return True
+        self.send_json(403, {"error": f"{role} token required"})
+        return False
+
+    def require_any_role(self, roles):
+        configured = [(role, os.getenv(ROLE_TOKENS[role])) for role in roles]
+        configured = [(role, token) for role, token in configured if token]
+        if not configured:
+            return True
+        auth = self.headers.get("Authorization", "")
+        supplied = auth.removeprefix("Bearer ").strip()
+        if any(supplied == token for _, token in configured):
+            return True
+        self.send_json(403, {"error": f"one of these role tokens is required: {', '.join(roles)}"})
+        return False
+
     def send_file(self, storage_key, include_body=True):
         file_path = storage_path(self.server.storage_root, storage_key)
         if not file_path or not file_path.exists() or not file_path.is_file():
@@ -398,10 +448,14 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True})
                 return
             if path == "/api/workspace/today":
+                if not self.require_role("executor"):
+                    return
                 date = query.get("date", [dt.date.today().isoformat()])[0]
                 self.send_json(200, {"date": date, "tasks": today_tasks(self.conn, date)})
                 return
             if path.startswith("/api/tasks/"):
+                if not self.require_any_role(["executor", "reviewer"]):
+                    return
                 task_id = path.split("/")[-1]
                 task = task_payload(self.conn, task_id)
                 if not task:
@@ -413,12 +467,18 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self.send_file(path.removeprefix("/files/").lstrip("/"))
                 return
             if path == "/api/review/queue":
+                if not self.require_role("reviewer"):
+                    return
                 self.send_json(200, {"review_requests": review_queue(self.conn)})
                 return
             if path == "/api/author/compiles":
+                if not self.require_role("author"):
+                    return
                 self.send_json(200, {"compiles": compile_summaries(self.conn)})
                 return
             if path.startswith("/api/author/compiles/") and path.endswith("/summary"):
+                if not self.require_role("author"):
+                    return
                 compile_id = path.split("/")[-2]
                 row = self.conn.execute("SELECT * FROM plan_compiles WHERE compile_id = ? OR id = ?", (compile_id, compile_id)).fetchone()
                 if not row:
@@ -430,6 +490,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                 payload["missing_materials"] = self.conn.execute("SELECT COUNT(*) FROM material_records WHERE plan_compile_id = ? AND missing = 1", (row["id"],)).fetchone()[0]
                 self.send_json(200, payload)
                 return
+            if path == "/api/writebacks":
+                if not self.require_role("author"):
+                    return
+                self.send_json(200, {"writebacks": writeback_queue(self.conn)})
+                return
             self.send_json(404, {"error": "not found"})
         except Exception as exc:
             self.send_json(500, {"error": str(exc)})
@@ -440,16 +505,31 @@ class ApiHandler(BaseHTTPRequestHandler):
             path = parsed.path.rstrip("/")
             payload = self.read_json()
             if path.startswith("/api/tasks/") and path.endswith("/evidence"):
+                if not self.require_role("executor"):
+                    return
                 task_id = path.split("/")[-2]
                 self.send_json(201, add_evidence(self.conn, task_id, payload))
                 return
             if path.startswith("/api/tasks/") and path.endswith("/review-requests"):
+                if not self.require_role("executor"):
+                    return
                 task_id = path.split("/")[-2]
                 self.send_json(201, create_review_request(self.conn, task_id))
                 return
             if path.startswith("/api/review/requests/") and path.endswith("/decision"):
+                if not self.require_role("reviewer"):
+                    return
                 review_request_id = path.split("/")[-2]
                 self.send_json(201, decide_review(self.conn, review_request_id, payload))
+                return
+            if path == "/api/writebacks/run":
+                if not self.require_role("author"):
+                    return
+                self.send_json(200, process_writebacks(
+                    self.conn,
+                    output_dir=payload.get("output_dir") if payload else None,
+                    in_place=bool(payload.get("in_place")) if payload else False,
+                ))
                 return
             self.send_json(404, {"error": "not found"})
         except KeyError as exc:

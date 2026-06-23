@@ -50,6 +50,7 @@ Design docs:
 - `docs/compile_snapshot_contract.md`
 - `docs/local_online_api_smoke.md`
 - `docs/material_publication_contract.md`
+- `docs/service_capabilities.md`
 
 First online data-layer harness:
 
@@ -57,6 +58,8 @@ First online data-layer harness:
 - `online_platform/import_compile_snapshot.py`
 - `online_platform/api_server.py`
 - `online_platform/publish_materials.py`
+- `online_platform/process_writebacks.py`
+- `online_platform/cloud_config_probe.py`
 - `online_platform/static/`
 
 ## State Machine

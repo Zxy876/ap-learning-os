@@ -89,6 +89,19 @@ curl -X POST "http://127.0.0.1:8776/api/review/requests/REVIEW_ID/decision" \
   -d '{"final_state":"not_completed","failure_type":"insufficient_evidence","message":"Need clearer screenshot evidence."}'
 ```
 
+Apply pending Excel writebacks into derived workbook copies:
+
+```bash
+python3 online_platform/process_writebacks.py \
+  --db data/online_platform/aplos_dev.sqlite3
+```
+
+Probe local cloud/auth configuration without printing secrets:
+
+```bash
+python3 online_platform/cloud_config_probe.py
+```
+
 ## What This Imports
 
 - organization placeholder
