@@ -202,14 +202,18 @@ function renderTaskDetail(task, detail) {
 function evidenceBlock(item) {
   const metadata = item.metadata || {};
   const href = item.storage_key ? `${basePath()}/files/${item.storage_key}` : "";
+  const previewHref = metadata.preview_storage_key ? `${basePath()}/files/${metadata.preview_storage_key}` : "";
   const isImage = item.artifact_type === "screenshot" || (metadata.content_type || "").startsWith("image/");
   const title = metadata.filename || item.storage_key || item.artifact_type;
   return el("div", { class: "material" }, [
     el("strong", { text: item.artifact_type }),
     item.text_note ? el("p", { text: item.text_note }) : null,
-    href ? el("a", { href, target: "_blank", rel: "noreferrer", text: title }) : null,
-    href && isImage ? el("a", { href, target: "_blank", rel: "noreferrer" }, [
-      el("img", { class: "evidence-image", src: href, alt: title }),
+    href ? el("div", { class: "actions" }, [
+      el("a", { class: "link-button", href, target: "_blank", rel: "noreferrer", text: `Open original: ${title}` }),
+      el("a", { class: "link-button", href, download: title, text: "Download original" }),
+    ]) : null,
+    (previewHref || (href && isImage)) ? el("a", { href: href || previewHref, target: "_blank", rel: "noreferrer" }, [
+      el("img", { class: "evidence-image", src: previewHref || href, alt: title }),
     ]) : null,
     !item.text_note && !href ? el("p", { class: "muted", text: "Empty note evidence." }) : null,
   ]);

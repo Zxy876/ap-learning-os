@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import zipfile
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -205,6 +206,40 @@ def storage_path(storage_root, storage_key):
 def safe_filename(name):
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", name or "evidence.bin").strip(".-")
     return cleaned or "evidence.bin"
+
+
+def create_image_preview(storage_root, source_key, evidence_id, max_size=(1600, 1600)):
+    source_path = storage_path(storage_root, source_key)
+    if not source_path or not source_path.exists():
+        return None
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return None
+    preview_key = str(Path(source_key).with_name(f"{evidence_id}-preview.jpg"))
+    preview_path = storage_path(storage_root, preview_key)
+    if not preview_path:
+        return None
+    try:
+        with Image.open(source_path) as image:
+            image = ImageOps.exif_transpose(image)
+            image.thumbnail(max_size)
+            if image.mode not in {"RGB", "L"}:
+                background = Image.new("RGB", image.size, (255, 255, 255))
+                if "A" in image.getbands():
+                    background.paste(image, mask=image.getchannel("A"))
+                else:
+                    background.paste(image)
+                image = background
+            elif image.mode == "L":
+                image = image.convert("RGB")
+            preview_path.parent.mkdir(parents=True, exist_ok=True)
+            image.save(preview_path, format="JPEG", quality=88, optimize=True)
+    except Exception:
+        with suppress(FileNotFoundError):
+            preview_path.unlink()
+        return None
+    return preview_key
 
 
 def decode_upload_file(file_payload, required=False):
@@ -458,6 +493,16 @@ def add_evidence_upload(conn, storage_root, task_id, payload):
         raise ValueError("invalid storage key")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(data)
+    metadata = {
+        "filename": filename,
+        "content_type": payload.get("content_type") or "",
+        "size_bytes": len(data),
+    }
+    if (metadata["content_type"].startswith("image/") or (payload.get("artifact_type") == "screenshot")):
+        preview_key = create_image_preview(storage_root, storage_key, evidence_id)
+        if preview_key:
+            metadata["preview_storage_key"] = preview_key
+            metadata["preview_content_type"] = "image/jpeg"
     conn.execute(
         """
         INSERT INTO evidence_artifacts
@@ -470,11 +515,7 @@ def add_evidence_upload(conn, storage_root, task_id, payload):
             payload.get("artifact_type") or "file",
             storage_key,
             payload.get("text_note") or "",
-            dumps({
-                "filename": filename,
-                "content_type": payload.get("content_type") or "",
-                "size_bytes": len(data),
-            }),
+            dumps(metadata),
         ),
     )
     conn.execute("UPDATE task_instances SET status = 'needs_review' WHERE id = ? AND status = 'planned'", (task_id,))
