@@ -810,7 +810,7 @@ class ApiHandler(BaseHTTPRequestHandler):
 </head>
 <body>
   <h1>AP Learning OS Live Review Status</h1>
-  <p>Live database view. Generated at {html.escape(generated_at)}. Auto-refreshes every 60 seconds. <a href="/review-status.csv">Download CSV</a></p>
+  <p>Live database view. Generated at {html.escape(generated_at)}. Auto-refreshes every 60 seconds. <a href="review-status.csv">Download CSV</a></p>
   <table>
     <thead><tr>{head}</tr></thead>
     <tbody>{''.join(body_rows) if body_rows else f'<tr><td colspan="{len(LIVE_REVIEW_COLUMNS)}">No active tasks.</td></tr>'}</tbody>
