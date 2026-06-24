@@ -143,30 +143,42 @@ function renderTaskDetail(task, detail) {
   });
   const note = el("textarea", { placeholder: "Evidence note, screenshot description, or external file link." });
   const evidenceFile = el("input", { type: "file", accept: "image/*,application/pdf,.txt,.md" });
+  const uploadStatus = el("div", { class: "muted" });
   const addEvidence = el("button", { text: "Add Evidence" });
   addEvidence.addEventListener("click", async () => {
-    await api(`/api/tasks/${task.id}/evidence`, {
-      method: "POST",
-      body: JSON.stringify({ artifact_type: "note", text_note: note.value }),
-    });
-    renderTaskDetail(await api(`/api/tasks/${task.id}`), detail);
+    try {
+      uploadStatus.textContent = "Saving note...";
+      await api(`/api/tasks/${task.id}/evidence`, {
+        method: "POST",
+        body: JSON.stringify({ artifact_type: "note", text_note: note.value }),
+      });
+      renderTaskDetail(await api(`/api/tasks/${task.id}`), detail);
+    } catch (error) {
+      uploadStatus.replaceChildren(el("div", { class: "error", text: error.message || String(error) }));
+    }
   });
   const uploadEvidence = el("button", { text: "Upload Evidence File" });
   uploadEvidence.addEventListener("click", async () => {
-    const file = evidenceFile.files && evidenceFile.files[0];
-    if (!file) throw new Error("Choose a file first.");
-    const dataUrl = await fileToDataUrl(file);
-    await api(`/api/tasks/${task.id}/evidence-upload`, {
-      method: "POST",
-      body: JSON.stringify({
-        artifact_type: file.type && file.type.startsWith("image/") ? "screenshot" : "file",
-        filename: file.name,
-        content_type: file.type,
-        data_base64: dataUrl,
-        text_note: note.value,
-      }),
-    });
-    renderTaskDetail(await api(`/api/tasks/${task.id}`), detail);
+    try {
+      const file = evidenceFile.files && evidenceFile.files[0];
+      if (!file) throw new Error("Choose a file first.");
+      uploadStatus.textContent = `Uploading ${file.name}...`;
+      const dataUrl = await fileToDataUrl(file);
+      await api(`/api/tasks/${task.id}/evidence-upload`, {
+        method: "POST",
+        body: JSON.stringify({
+          artifact_type: file.type && file.type.startsWith("image/") ? "screenshot" : "file",
+          filename: file.name,
+          content_type: file.type,
+          data_base64: dataUrl,
+          text_note: note.value,
+        }),
+      });
+      uploadStatus.textContent = "Uploaded.";
+      renderTaskDetail(await api(`/api/tasks/${task.id}`), detail);
+    } catch (error) {
+      uploadStatus.replaceChildren(el("div", { class: "error", text: error.message || String(error) }));
+    }
   });
   const requestReview = el("button", { class: "primary", text: "Request Review" });
   requestReview.addEventListener("click", async () => {
@@ -183,14 +195,23 @@ function renderTaskDetail(task, detail) {
     note,
     evidenceFile,
     el("div", { class: "actions" }, [addEvidence, uploadEvidence, requestReview]),
+    uploadStatus,
   );
 }
 
 function evidenceBlock(item) {
+  const metadata = item.metadata || {};
+  const href = item.storage_key ? `${basePath()}/files/${item.storage_key}` : "";
+  const isImage = item.artifact_type === "screenshot" || (metadata.content_type || "").startsWith("image/");
+  const title = metadata.filename || item.storage_key || item.artifact_type;
   return el("div", { class: "material" }, [
     el("strong", { text: item.artifact_type }),
     item.text_note ? el("p", { text: item.text_note }) : null,
-    item.storage_key ? el("a", { href: `${basePath()}/files/${item.storage_key}`, target: "_blank", rel: "noreferrer", text: item.storage_key }) : null,
+    href ? el("a", { href, target: "_blank", rel: "noreferrer", text: title }) : null,
+    href && isImage ? el("a", { href, target: "_blank", rel: "noreferrer" }, [
+      el("img", { class: "evidence-image", src: href, alt: title }),
+    ]) : null,
+    !item.text_note && !href ? el("p", { class: "muted", text: "Empty note evidence." }) : null,
   ]);
 }
 
@@ -309,7 +330,7 @@ function renderReviewDetail(request, task, detail, reload) {
     el("h2", { text: task.title }),
     el("div", { class: "meta" }, [statusPill(task.status), el("span", { class: "pill", text: task.source_lineage.sheet }), el("span", { class: "pill", text: `row ${task.source_lineage.row_number}` })]),
     el("h3", { text: "Evidence" }),
-    ...task.evidence.map((item) => evidenceBlock(item)),
+    ...(task.evidence.length ? task.evidence.map((item) => evidenceBlock(item)) : [el("p", { class: "muted", text: "No evidence uploaded yet." })]),
     el("h3", { text: "Decision" }),
     el("label", { text: "Final state" }, [state]),
     el("label", { text: "Failure type" }, [failure]),

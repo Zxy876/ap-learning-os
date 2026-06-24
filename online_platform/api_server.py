@@ -169,13 +169,14 @@ def task_payload(conn, task_id, include_materials=True):
             (task_id,),
         ).fetchall()
         task["materials"] = [material_payload(row) for row in material_rows]
-        task["evidence"] = [
-            row_to_dict(item)
-            for item in conn.execute(
-                "SELECT * FROM evidence_artifacts WHERE task_instance_id = ? ORDER BY created_at",
-                (task_id,),
-            ).fetchall()
-        ]
+        task["evidence"] = []
+        for item in conn.execute(
+            "SELECT * FROM evidence_artifacts WHERE task_instance_id = ? ORDER BY created_at",
+            (task_id,),
+        ).fetchall():
+            evidence = row_to_dict(item)
+            evidence["metadata"] = json_loads(evidence.pop("metadata_json"), {})
+            task["evidence"].append(evidence)
     return task
 
 
@@ -380,7 +381,7 @@ def add_evidence_upload(conn, storage_root, task_id, payload):
         data = base64.b64decode(raw, validate=True)
     except Exception as exc:
         raise ValueError("data_base64 must be valid base64") from exc
-    max_bytes = int(os.getenv("APLOS_MAX_EVIDENCE_BYTES", str(20 * 1024 * 1024)))
+    max_bytes = int(os.getenv("APLOS_MAX_EVIDENCE_BYTES", str(80 * 1024 * 1024)))
     if len(data) > max_bytes:
         raise ValueError(f"evidence file is too large; max {max_bytes} bytes")
     filename = safe_filename(payload.get("filename") or "evidence.bin")

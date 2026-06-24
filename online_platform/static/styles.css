@@ -234,6 +234,17 @@ textarea {
   word-break: break-all;
 }
 
+.evidence-image {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+}
+
 .empty {
   background: var(--panel);
   border: 1px dashed var(--line);
