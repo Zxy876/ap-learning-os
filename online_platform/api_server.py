@@ -2,7 +2,10 @@
 import argparse
 import base64
 import copy
+import csv
 import datetime as dt
+import html
+import io
 import json
 import mimetypes
 import os
@@ -346,6 +349,69 @@ def writeback_queue(conn):
     return out
 
 
+def live_review_status_rows(conn):
+    active_compile_ids = set(active_compile_ids_by_course(conn).values())
+    if not active_compile_ids:
+        return []
+    placeholders = ",".join("?" for _ in active_compile_ids)
+    rows = conn.execute(
+        f"""
+        SELECT ti.id, ti.scheduled_date, ti.course, ti.unit, ti.phase, ti.title, ti.status,
+               ti.target_minutes, ti.observable_goal,
+               pr.source_workbook, pr.source_sheet, pr.source_row_number
+        FROM task_instances ti
+        LEFT JOIN plan_steps ps ON ps.id = ti.plan_step_id
+        LEFT JOIN plan_rows pr ON pr.id = ps.plan_row_id
+        WHERE ti.plan_compile_id IN ({placeholders})
+        ORDER BY ti.scheduled_date ASC, ti.course ASC, ti.title ASC
+        """,
+        tuple(active_compile_ids),
+    ).fetchall()
+    out = []
+    for row in rows:
+        decision = conn.execute(
+            """
+            SELECT rd.final_state, rd.failure_type, rd.message, rd.created_at AS reviewed_at
+            FROM review_decisions rd
+            JOIN review_requests rr ON rr.id = rd.review_request_id
+            WHERE rr.task_instance_id = ?
+            ORDER BY rd.created_at DESC
+            LIMIT 1
+            """,
+            (row["id"],),
+        ).fetchone()
+        evidence_count = scalar(conn.execute(
+            "SELECT COUNT(*) FROM evidence_artifacts WHERE task_instance_id = ?",
+            (row["id"],),
+        ).fetchone())
+        item = row_to_dict(row)
+        item["evidence_count"] = evidence_count
+        if decision:
+            item.update(row_to_dict(decision))
+        else:
+            item.update({"final_state": "", "failure_type": "", "message": "", "reviewed_at": ""})
+        out.append(item)
+    return out
+
+
+LIVE_REVIEW_COLUMNS = [
+    ("scheduled_date", "Date"),
+    ("course", "Course"),
+    ("unit", "Unit"),
+    ("phase", "Phase"),
+    ("title", "Task"),
+    ("status", "Current Status"),
+    ("final_state", "C Final State"),
+    ("failure_type", "Failure Type"),
+    ("message", "C Message"),
+    ("reviewed_at", "Reviewed At"),
+    ("evidence_count", "Evidence"),
+    ("target_minutes", "Minutes"),
+    ("source_sheet", "Source Sheet"),
+    ("source_row_number", "Source Row"),
+]
+
+
 def add_evidence(conn, task_id, payload):
     if not conn.execute("SELECT 1 FROM task_instances WHERE id = ?", (task_id,)).fetchone():
         raise KeyError("task not found")
@@ -625,6 +691,16 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_bytes(self, status, body, content_type, filename=None):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.end_headers()
+        self.wfile.write(body)
+
     def read_json(self):
         length = int(self.headers.get("Content-Length") or 0)
         if length == 0:
@@ -703,6 +779,59 @@ class ApiHandler(BaseHTTPRequestHandler):
         if include_body:
             self.wfile.write(data)
 
+    def send_live_review_table(self):
+        rows = live_review_status_rows(self.conn)
+        generated_at = dt.datetime.now().isoformat(timespec="seconds")
+        head = "".join(f"<th>{html.escape(label)}</th>" for _, label in LIVE_REVIEW_COLUMNS)
+        body_rows = []
+        for row in rows:
+            cells = "".join(
+                f"<td>{html.escape(str(row.get(key) if row.get(key) is not None else ''))}</td>"
+                for key, _ in LIVE_REVIEW_COLUMNS
+            )
+            body_rows.append(f"<tr>{cells}</tr>")
+        body = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="60">
+  <title>AP Learning OS Live Review Status</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #18202a; }}
+    h1 {{ font-size: 22px; margin: 0 0 6px; }}
+    p {{ color: #64707d; margin: 0 0 16px; }}
+    a {{ color: #146c63; }}
+    table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+    th, td {{ border: 1px solid #d7dce0; padding: 7px 8px; vertical-align: top; }}
+    th {{ background: #f6f7f8; position: sticky; top: 0; text-align: left; }}
+    tr:nth-child(even) td {{ background: #fbfbfc; }}
+  </style>
+</head>
+<body>
+  <h1>AP Learning OS Live Review Status</h1>
+  <p>Live database view. Generated at {html.escape(generated_at)}. Auto-refreshes every 60 seconds. <a href="/review-status.csv">Download CSV</a></p>
+  <table>
+    <thead><tr>{head}</tr></thead>
+    <tbody>{''.join(body_rows) if body_rows else f'<tr><td colspan="{len(LIVE_REVIEW_COLUMNS)}">No active tasks.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>"""
+        self.send_bytes(200, body.encode("utf-8"), "text/html; charset=utf-8")
+
+    def send_live_review_csv(self):
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([label for _, label in LIVE_REVIEW_COLUMNS])
+        for row in live_review_status_rows(self.conn):
+            writer.writerow([row.get(key, "") for key, _ in LIVE_REVIEW_COLUMNS])
+        self.send_bytes(
+            200,
+            output.getvalue().encode("utf-8-sig"),
+            "text/csv; charset=utf-8",
+            filename="ap-learning-os-live-review-status.csv",
+        )
+
     def do_OPTIONS(self):
         self.send_json(200, {"ok": True})
 
@@ -731,6 +860,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/health":
                 self.send_json(200, {"ok": True})
+                return
+            if path == "/review-status":
+                self.send_live_review_table()
+                return
+            if path == "/review-status.csv":
+                self.send_live_review_csv()
                 return
             if path == "/api/workspace/today":
                 if not self.require_role("executor"):

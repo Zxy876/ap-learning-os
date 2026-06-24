@@ -390,6 +390,17 @@ async function renderAuthor() {
     el("div", { class: "actions" }, [compileButton]),
     compileResult,
   ]);
+  const liveTableUrl = `${window.location.origin}${basePath()}/review-status`;
+  const liveCsvUrl = `${window.location.origin}${basePath()}/review-status.csv`;
+  const liveStatusLinks = el("section", { class: "record" }, [
+    el("h2", { text: "Live Review Status Link" }),
+    el("p", { class: "muted", text: "This link is not a snapshot. It reads the latest task and C review state from the database whenever someone opens it." }),
+    el("div", { class: "actions" }, [
+      el("a", { class: "link-button primary", href: liveTableUrl, target: "_blank", rel: "noreferrer", text: "Open Live Table" }),
+      el("a", { class: "link-button", href: liveCsvUrl, target: "_blank", rel: "noreferrer", text: "Download Live CSV" }),
+    ]),
+    el("pre", { class: "result", text: liveTableUrl }),
+  ]);
   const data = await api("/api/author/compiles");
   const list = el("section", { class: "list" });
   if (!data.compiles.length) {
@@ -423,7 +434,7 @@ async function renderAuthor() {
       authorWorkspacePreview(compile),
     ]));
   });
-  app.replaceChildren(tools, list);
+  app.replaceChildren(tools, liveStatusLinks, list);
 }
 
 async function boot() {
