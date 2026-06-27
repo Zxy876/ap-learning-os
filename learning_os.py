@@ -508,6 +508,34 @@ def resource_index_resources(config, course, unit, title="", kind=None):
     return resources
 
 
+def stewart_textbook_path(config):
+    canonical = config.get("canonical_materials", {}).get("AP_Calculus_BC", {}).get("stewart_textbook")
+    if canonical and Path(canonical).exists():
+        return str(Path(canonical))
+
+    for entry in resource_index_entries(config, "AP_Calculus_BC"):
+        if entry["category"] not in {"教材", "课本"}:
+            continue
+        target = resolve_index_resource(config, entry)
+        if target and Path(target).exists():
+            actual = normalize_resource_key(Path(target).name)
+            if "stewart" in actual and "calculus" in actual:
+                return str(Path(target))
+
+    for root in resource_search_roots(config):
+        for candidate in root.rglob("*.pdf"):
+            if is_generated_material(candidate):
+                continue
+            actual = normalize_resource_key(candidate.name)
+            if (
+                "stewart" in actual
+                and "calculus" in actual
+                and ("transcendentals" in actual or "early" in actual)
+            ):
+                return str(candidate)
+    return None
+
+
 def supplemental_courseware_resources(config, course, unit):
     target = config.get("supplemental_courseware", {}).get(course, {}).get(str(unit))
     if target and Path(target).exists():
@@ -787,8 +815,8 @@ def parse_stewart_sections(text):
 
 
 def stewart_excerpt_resources(config, row):
-    material = config.get("canonical_materials", {}).get("AP_Calculus_BC", {}).get("stewart_textbook")
-    if not material or not Path(material).exists():
+    material = stewart_textbook_path(config)
+    if not material:
         return []
     refs = parse_stewart_sections(row.get("课件/课本参考"))
     if not refs:
