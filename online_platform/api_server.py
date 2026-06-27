@@ -787,10 +787,53 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.send_json(404, {"error": "file not found"})
             return
         content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        total_size = file_path.stat().st_size
+        range_header = self.headers.get("Range") if include_body else None
+        if range_header and range_header.startswith("bytes="):
+            try:
+                spec = range_header.removeprefix("bytes=").split(",", 1)[0].strip()
+                start_text, end_text = spec.split("-", 1)
+                if start_text:
+                    start = int(start_text)
+                    end = int(end_text) if end_text else total_size - 1
+                else:
+                    suffix_len = int(end_text)
+                    start = max(total_size - suffix_len, 0)
+                    end = total_size - 1
+                if start < 0 or end < start or start >= total_size:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{total_size}")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    return
+                end = min(end, total_size - 1)
+            except Exception:
+                start, end = 0, total_size - 1
+            length = end - start + 1
+            self.send_response(206)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(length))
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total_size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            with file_path.open("rb") as handle:
+                handle.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = handle.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+            return
         data = file_path.read_bytes() if include_body else b""
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(file_path.stat().st_size))
+        self.send_header("Content-Length", str(total_size))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "public, max-age=86400")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         if include_body:
