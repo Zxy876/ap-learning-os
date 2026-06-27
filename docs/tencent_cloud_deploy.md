@@ -137,12 +137,12 @@ Server-side upload defaults:
 
 ```text
 APLOS_UPLOAD_ROOT=/app/uploads
-APLOS_MAX_AUTHOR_UPLOAD_BYTES=104857600
+APLOS_MAX_AUTHOR_UPLOAD_BYTES=524288000
 ```
 
 If nginx is in front of AP Learning OS, its `client_max_body_size` must be at
 least as large as the uploaded JSON payload. Base64 adds roughly 33% overhead,
-so a 50 MB ZIP needs a limit above 67 MB.
+so a 500 MB raw upload needs a reverse proxy limit above 667 MB.
 
 Executor evidence uploads are stored under `APLOS_STORAGE_ROOT/evidence`.
 The default upload limit is 20 MB. Override it with:

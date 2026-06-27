@@ -254,7 +254,7 @@ def decode_upload_file(file_payload, required=False):
         data = base64.b64decode(raw, validate=True)
     except Exception as exc:
         raise ValueError(f"{file_payload.get('filename') or 'uploaded file'} is not valid base64") from exc
-    max_bytes = int(os.getenv("APLOS_MAX_AUTHOR_UPLOAD_BYTES", str(100 * 1024 * 1024)))
+    max_bytes = int(os.getenv("APLOS_MAX_AUTHOR_UPLOAD_BYTES", str(500 * 1024 * 1024)))
     if len(data) > max_bytes:
         raise ValueError(f"uploaded file is too large; max {max_bytes} bytes")
     return {

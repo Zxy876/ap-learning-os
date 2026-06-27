@@ -364,6 +364,15 @@ def strict_resource_match(entry, candidate):
     if entry["course"] == "AP_CSA" and entry["category"] in {"真题", "模考"}:
         if "csa" not in path_text and "computer science" not in path_text:
             return 0
+    if entry["course"] == "AP_Calculus_BC" and entry["category"] in {"教材", "课本"}:
+        actual_text = normalize_resource_key(candidate.name)
+        if (
+            "stewart" in actual_text
+            and "calculus" in actual_text
+            and ("transcendentals" in actual_text or "early" in actual_text)
+            and candidate.suffix.lower() == ".pdf"
+        ):
+            return 900
     expected = normalize_resource_key(Path(filename).name)
     actual = normalize_resource_key(candidate.name)
     if expected and actual == expected:
